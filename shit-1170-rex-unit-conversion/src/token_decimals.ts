@@ -53,22 +53,28 @@ type TOKEN_ROW = readonly [string, string | null, number | null];
 
 // ========================================
 // --- QUIET LOG -------------------------
-// the middleman logs its framed request and response with console.log,
-// which lands on stdout.
+// the middleman logs its framed request and response with console.log.
 //
-// --- WHY IT IS MOVED TO STDERR: this package's bin prints its answer
-// as JSON on stdout, and an agent reads that stdout by parsing it. a
-// log frame in the middle of the JSON makes it unparseable, and the
-// conversion silently fails downstream. the frame is still printed —
-// it is useful when a call goes wrong — but on stderr, where it
-// belongs.
+// --- WHY IT IS SILENCED: this package's bin prints its answer as JSON
+// on stdout, and an agent reads that stdout by parsing it. a log frame
+// in the middle of the JSON makes it unparseable, and the conversion
+// silently fails downstream.
+//
+// --- WHY THE FRAME IS DROPPED AND NOT MOVED TO STDERR: stderr carries
+// this bin's json errors, and a caller reads those by parsing them too.
+// a frame in front of the error json breaks that the same way. the
+// frame is useful when a call goes wrong, so it is kept behind a
+// switch: set UNIT_CONVERSION_LOG=1 to see it.
+const UNIT_CONVERSION_LOG = process.env.UNIT_CONVERSION_LOG === "1";
+
 async function api_intear_tokens_get_with_quiet_log<
   t extends Parameters<typeof api_intear_tokens_get>[0],
 >(params: t): Promise<Awaited<ReturnType<typeof api_intear_tokens_get>>> {
+  if (UNIT_CONVERSION_LOG) {
+    return await api_intear_tokens_get(params);
+  }
   const original = console.log;
-  console.log = (...args: unknown[]) => {
-    console.error(...args);
-  };
+  console.log = () => {};
   try {
     return await api_intear_tokens_get(params);
   } finally {

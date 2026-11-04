@@ -4,5 +4,9 @@ dist/
 .tsbuildinfo
 bun.lock
 
+# python bytecode
+__pycache__/
+*.pyc
+
 # the eval workspace: local test runs, not part of the skill
 *-workspace/

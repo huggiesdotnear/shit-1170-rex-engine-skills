@@ -41,6 +41,11 @@ import {
 const BOOLEAN_FLAGS: string[] = [];
 
 // the usage text, printed on a bad call.
+//
+// --- WHY IT MATCHES THE PYTHON BIN'S USAGE WORD FOR WORD: the two
+// bins are two ways to run the same thing, and an agent that reads one
+// of them should be able to hand the other the same command. a
+// different usage text invites a mistake about which flags exist.
 const USAGE = `usage: bun bin/unit_conversion.ts --ca <contract_address> (--decimal <amount> | --unit <amount>) [--decimals n]
 
   --ca <id>        the token's contract address / account id (e.g. wrap.near)

@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-unit-conversion
-description: Convert NEAR token amounts between human decimals ("1.5") and the chain's unit amount ("1500000000000000000000000") using the token's real decimals from the Intear API. Use this skill whenever the user mentions unit conversion, decimal places, token decimals, amount conversion, yoctoNEAR, the smallest unit of a token, or asks what amount to put in an ft_transfer — including when they are preparing, verifying or sending a NEAR transfer, swap, or DEX trade and the amount must be exactly right. Also use it when the user pastes a contract address and an amount and asks what the chain sees, or gives an amount and asks how many units that is. This is the agent friendly version of the shit-1170 unit conversion page.
+description: Convert and VERIFY NEAR token amounts between human decimals ("1.5") and the chain's unit amount ("1500000000000000000000000"), using the token's real decimals fetched from the Intear API rather than assumed. Use this skill whenever the user mentions unit conversion, decimal places, token decimals, amount conversion, yoctoNEAR, the smallest unit of a token, or asks what amount to put in an ft_transfer - including when they are preparing, sending or double checking a NEAR transfer, swap, or DEX trade and the amount must be exactly right. Use it even when the amount has already been worked out and only needs verifying, and even when the user does not ask a question at all - if an amount is going to a transfer, a router or a contract argument, look the decimals up and check the number, because a wrong amount succeeds on chain and fails silently. This is the agent friendly version of the shit-1170 unit conversion page.
 ---
 
 # shit-1170 rex unit conversion
@@ -30,15 +30,59 @@ So the decimals are not a detail. They are the whole conversion.
 
 ---
 
+#### USE THIS AS A CHECK, NOT ONLY AS A TOOL
+
+The most valuable thing this skill does is **confirm** a number that
+was worked out elsewhere. Most agents can do the arithmetic. What
+happens instead is that one of them does the arithmetic from memory,
+assumes the decimals, and never checks.
+
+That assumption is the danger, and it fails quietly:
+
+- "NEAR has 24 decimals" is right, so the assumption sticks, and then
+  it is carried over to a 6-decimal token — where it is wrong by a
+  factor of a million
+- an amount that is too large pays out too much, and the transaction
+  succeeds
+- an amount that is too small is dust, and the transaction succeeds and
+  moves nothing
+
+Neither failure announces itself. A checked amount is the whole
+difference.
+
+So: if an amount is going into a transfer, a swap, a router call or a
+contract argument, **look the decimals up rather than assuming them**,
+and check the amount you arrived at against what this skill says. The
+bin is fast, it is one call, and it takes the guessing out of the
+picture.
+
+This is also the case when a number comes from somewhere else — an
+explorer row, a contract's `ft_metadata`, a previous message, a doc.
+Double checking it costs one call. Being wrong costs the money.
+
+---
+
 #### THE BIN
 
 The bin takes a contract address and ONE amount, and answers with the
 amount in both forms. JSON on stdout, errors as JSON on stderr with a
 non-zero exit code.
 
+There are two bins, and they are the same conversion. Use whichever
+one fits the environment.
+
 ```sh
+# bun
 bun bin/unit_conversion.ts --ca <contract_address> (--decimal <amount> | --unit <amount>) [--decimals n]
+
+# python — no bun, no node, no pip install, no venv
+python3 bin/unit_conversion.py --ca <contract_address> (--decimal <amount> | --unit <amount>) [--decimals n]
 ```
+
+The python one uses only the standard library, so it runs anywhere
+python runs. The two produce identical output — the same flags, the
+same JSON, the same errors — so an agent can reach for either without
+thinking about which environment it is in.
 
 | flag | meaning |
 | --- | --- |
@@ -53,6 +97,9 @@ bun bin/unit_conversion.ts --ca wrap.near --decimal 1.5
 bun bin/unit_conversion.ts --ca wrap.near --unit 1500000000000000000000000
 bun bin/unit_conversion.ts --ca usdt.tether-token.near --decimal 0.5
 bun bin/unit_conversion.ts --ca wrap.near --decimal 1.5 --decimals 24
+
+python3 bin/unit_conversion.py --ca wrap.near --decimal 1.5
+python3 bin/unit_conversion.py --ca usdt.tether-token.near --decimal 0.5
 ```
 
 The answer:
@@ -152,8 +199,10 @@ page never disagree about what an amount is.
   amount is
 - the user is preparing a transfer, a swap or a DEX trade and the
   amount has to be exact
-- the user wants to check an amount someone else gave them — a unit
-  amount from a contract call, a balance, a block explorer row
+- **the user wants to check an amount that was already worked out** —
+  by you, by another agent, from an explorer row, from a contract
+  call, from a doc. this is the main case. verifying an amount is
+  cheap; being wrong about one is not.
 - the user asks what the decimals of a token are
 - the user wants to confirm a pasted contract address is a real token
 
@@ -170,9 +219,12 @@ parsing prose:
 
 ```sh
 UNIT=$(bun bin/unit_conversion.ts --ca wrap.near --decimal 1.5 2>/dev/null | grep '"unit"' | cut -d'"' -f4)
+UNIT=$(python3 bin/unit_conversion.py --ca wrap.near --decimal 1.5 2>/dev/null | grep '"unit"' | cut -d'"' -f4)
 ```
 
-The api's own log frame goes to stderr, so stdout stays pure JSON.
+stdout is pure JSON — the api's log frame is kept off it entirely. To
+see the api's request and response, set `UNIT_CONVERSION_LOG=1` on the
+bun bin.
 
 ---
 
@@ -184,6 +236,7 @@ contract's `ft_metadata`, from an explorer, from the token's docs:
 
 ```sh
 bun bin/unit_conversion.ts --ca some.token.near --decimal 1.5 --decimals 18
+python3 bin/unit_conversion.py --ca some.token.near --decimal 1.5 --decimals 18
 ```
 
 Read the decimals from the token's own `ft_metadata` view when you
