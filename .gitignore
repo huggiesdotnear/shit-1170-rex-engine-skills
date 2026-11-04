@@ -1,0 +1,8 @@
+# deps and build output
+node_modules/
+dist/
+.tsbuildinfo
+bun.lock
+
+# the eval workspace: local test runs, not part of the skill
+*-workspace/

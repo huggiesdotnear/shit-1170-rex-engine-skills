@@ -1,0 +1,29 @@
+{
+  "skill_name": "shit-1170-rex-unit-conversion",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I want to send 2.5 wNEAR to my friend. wrap.near is the wNEAR token right? What is the exact amount I need to put in the ft_transfer call?",
+      "expected_output": "Converts 2.5 wNEAR to 2500000000000000000000000 (24 decimals) and explains that this is the unit amount the ft_transfer call needs.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "I'm looking at this explorer row for a token balance: 42000000 on usdt.tether-token.near. How many USDt is that actually?",
+      "expected_output": "Converts the unit amount 42000000 to 42 USDt using 6 decimals fetched from the Intear API.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "quick check before I swap: the router wants a unit amount for 0.0004 of some token, let me know the exact unit amount. also sanity check the contract address is a real token: usdt.tether-token.near",
+      "expected_output": "Converts 0.0004 to 400 using 6 decimals, and confirms the token exists in the registry with its symbol and decimals.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I have a transaction receipt that says amount 1500000000000000000000000 was transferred. that's 1.5 NEAR right? the token was near, not wrap.near.",
+      "expected_output": "Converts the unit amount to 1.5 using 24 decimals for the native near token, handling 'near' locally since it is not in the Intear registry.",
+      "files": []
+    }
+  ]
+}
