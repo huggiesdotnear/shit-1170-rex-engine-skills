@@ -1,0 +1,35 @@
+{
+  "skill_name": "shit-1170-rex-engine",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to send 25 USDC from my alice.near account to bob.near. Please set this up in the shit-1170 engine so I can sign it.",
+      "expected_output": "Uses the FT flow: confirms the token id and decimals, checks bob.near exists and is on the contact list (asking the human to confirm the address if it is not), prepares an ft_transfer with 1 yoctoNEAR deposit, queues it with the engine for alice.near, explains what was queued, and reports the queue id and local copy path without claiming it was sent.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Queue up a batch for me: deposit 0.5 NEAR into storage on usdt.tether-token.near and then transfer 25 USDC to bob.near. bob.near is on my contacts list.",
+      "expected_output": "Researches and verifies the storage_deposit minimum and the ft_transfer deposit, builds a two-call batch in the right order (storage first, then transfer), queues it, explains both calls with gas and deposit, and waits for the human to sign.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "My rex engine API key is for alice.near. Queue a swap of 1.5 wNEAR for USDC. The amount is in human decimals, so get the raw amount right.",
+      "expected_output": "Stores or resolves the alice.near key, converts 1.5 wNEAR to the raw unit amount using the token's real decimals (24 for wNEAR), queues the swap with tokenIn/amountIn/tokenOut, explains it, and does not wait for or request a signature beyond telling the user it is queued.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "I signed the batch you queued yesterday. Here is the hash. Can you update your records so I know if it actually worked?",
+      "expected_output": "Reports the hash to the engine's sent route with the txId, reads the receipt on chain with the FastNear API to determine the real outcome, syncs the local record under ${HOME}/.shit-1170-rex-engine/queue/, and tells the user the actual outcome rather than assuming success.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "What does the shit-1170 website show about my account? Give me the same thing an agent should know.",
+      "expected_output": "Reads the website's own data sources: direct and native balances from the Intear API, token metadata, and the Rhea/INTEAR internal balance views where relevant, rather than inventing a summary.",
+      "files": []
+    }
+  ]
+}

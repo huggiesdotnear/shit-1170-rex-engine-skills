@@ -1,0 +1,161 @@
+#!/usr/bin/env bun
+import { readFile } from "node:fs/promises";
+import {
+  shit_1170_flag_bool_fun,
+  shit_1170_flag_string_fun,
+  shit_1170_parse_args_fun,
+  shit_1170_require_string_fun,
+} from "../src/args";
+import {
+  shit_1170_print_error_fun,
+  shit_1170_print_json_fun,
+  shit_1170_quiet_fun,
+} from "../src/json_io";
+import { shit_1170_account_resolve_fun } from "../src/keyring";
+import { shit_1170_base_url_fun } from "../src/engine";
+import {
+  shit_1170_queue_record_get_fun,
+  shit_1170_queue_record_put_fun,
+} from "../src/local_queue";
+import {
+  api_shit_1170_swap_queue_sent_post,
+  api_shit_1170_tx_queue_sent_post,
+  type SHIT_1170_TX_QUEUE_HASH_REQUEST,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
+const SHIT_1170_CLIENT_STATUSES = ["succeeded", "failed"] as const;
+type SHIT_1170_CLIENT_STATUS = (typeof SHIT_1170_CLIENT_STATUSES)[number];
+
+function parse_status_fun(raw: string): SHIT_1170_CLIENT_STATUS {
+  if (
+    !(SHIT_1170_CLIENT_STATUSES as readonly string[]).includes(raw)
+  ) {
+    throw new Error(
+      `--status must be one of ${SHIT_1170_CLIENT_STATUSES.join(", ")}; omit it to record "sent"`,
+    );
+  }
+  return raw as SHIT_1170_CLIENT_STATUS;
+}
+
+function validate_hashes_fun(
+  value: unknown,
+): SHIT_1170_TX_QUEUE_HASH_REQUEST[] {
+  if (!Array.isArray(value)) {
+    throw new Error("the hashes file must hold a JSON array of hash entries");
+  }
+  return value.map((entry, index) => {
+    const where = `the hashes file entry at index ${index}`;
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error(`${where} must be an object`);
+    }
+    const record = entry as Record<string, unknown>;
+    const txId = record.txId;
+    if (typeof txId !== "string" || txId.trim().length === 0) {
+      throw new Error(`${where} must have a non-empty string "txId"`);
+    }
+    const txHash = record.txHash;
+    if (typeof txHash !== "string" || txHash.trim().length === 0) {
+      throw new Error(`${where} must have a non-empty string "txHash"`);
+    }
+    const status = record.status;
+    if (
+      status !== undefined &&
+      status !== null &&
+      !(
+        typeof status === "string" &&
+        (SHIT_1170_CLIENT_STATUSES as readonly string[]).includes(status)
+      )
+    ) {
+      throw new Error(
+        `${where} has an invalid "status"; it must be "succeeded" or "failed"`,
+      );
+    }
+    const out: SHIT_1170_TX_QUEUE_HASH_REQUEST = { txId, txHash };
+    if (typeof status === "string") out.status = status as SHIT_1170_CLIENT_STATUS;
+    return out;
+  });
+}
+
+async function main_fun(): Promise<void> {
+  const args = shit_1170_parse_args_fun(process.argv.slice(2));
+  const command = args.positional[0] ?? "help";
+  if (command === "help" || shit_1170_flag_bool_fun(args, "help")) {
+    shit_1170_print_json_fun({
+      ok: true,
+      usage: [
+        "queue_sent tx --queue <id> --hashes <tx-hashes.json> [--account signer]",
+        "queue_sent swap --swap <id> --tx-hash <hash> [--status succeeded|failed] [--amount-out <unit>]",
+        "omit --status to record the transaction as sent",
+      ],
+    });
+    return;
+  }
+
+  const profile = await shit_1170_account_resolve_fun(
+    shit_1170_flag_string_fun(args, "account"),
+  );
+  const baseUrl = shit_1170_base_url_fun(
+    shit_1170_flag_string_fun(args, "base-url") ?? profile.baseUrl,
+  );
+
+  if (command === "tx") {
+    const queueId = shit_1170_require_string_fun(args, "queue");
+    const file = shit_1170_require_string_fun(args, "hashes");
+    const hashes = validate_hashes_fun(
+      JSON.parse(await readFile(file, "utf8")),
+    );
+    const result = await shit_1170_quiet_fun(() =>
+      api_shit_1170_tx_queue_sent_post(
+        baseUrl,
+        queueId,
+        { txHashes: hashes },
+        { api_key: profile.apiKey },
+      ),
+    );
+    const existing = await shit_1170_queue_record_get_fun("tx", queueId);
+    await shit_1170_queue_record_put_fun({
+      kind: "tx",
+      id: queueId,
+      request: existing?.request ?? { txHashes: hashes },
+      response: result as unknown as Record<string, unknown>,
+    });
+    shit_1170_print_json_fun({ ok: true, queue: result });
+    return;
+  }
+
+  if (command === "swap") {
+    const swapId = shit_1170_require_string_fun(args, "swap");
+    const txHash = shit_1170_require_string_fun(args, "tx-hash");
+    const statusRaw = shit_1170_flag_string_fun(args, "status");
+    const status = statusRaw === undefined ? undefined : parse_status_fun(statusRaw);
+    const amountOut = shit_1170_flag_string_fun(args, "amount-out");
+    const result = await shit_1170_quiet_fun(() =>
+      api_shit_1170_swap_queue_sent_post(
+        baseUrl,
+        swapId,
+        {
+          txHash,
+          status,
+          amountOut,
+        },
+        { api_key: profile.apiKey },
+      ),
+    );
+    const existing = await shit_1170_queue_record_get_fun("swap", swapId);
+    await shit_1170_queue_record_put_fun({
+      kind: "swap",
+      id: swapId,
+      request: existing?.request ?? { txHash, status, amountOut },
+      response: result as unknown as Record<string, unknown>,
+    });
+    shit_1170_print_json_fun({ ok: true, swap: result });
+    return;
+  }
+
+  throw new Error(`unknown command: ${command}`);
+}
+
+main_fun().catch((err) => {
+  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  process.exitCode = 1;
+});
