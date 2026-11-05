@@ -9,7 +9,7 @@ Turn a human amount into the chain's unit amount, and back, using the
 token's real decimals.
 
 - live page: <https://shit-1170.com/unit-conversion.html>
-- code: <https://github.com/huggiesdotnear/huggies-rex-engine>
+- code: <https://github.com/huggiesdotnear/shit-1170-rex-engine>
 
 ---
 

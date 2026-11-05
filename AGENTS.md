@@ -4,7 +4,7 @@ this is a skill library for shit-1170-rex-engine
 
 - see skill list in [README.md](./README.md)
 - see live site at 🌐 https://shit-1170.com/
-- see code at 🐱 https://github.com/huggiesdotnear/huggies-rex-engine
+- see code at 🐱 https://github.com/huggiesdotnear/shit-1170-rex-engine
 
 =====================
 <br/>
