@@ -27,6 +27,62 @@ queue a call that moves the wrong amount to the wrong place.
 
 ---
 
+#### READING AND WRITING
+
+the six moves above cross two different systems, and which one a step
+touches decides what it may do.
+
+| | view calls | contract interaction |
+| --- | --- | --- |
+| where it goes | the near-kit tool box, directly | the engine's queue |
+| who does it | the agent | a human, in the web app, with their wallet |
+| what it needs | nothing — no API key, no engine account | an API key for the account, and the human's signature |
+| what it produces | an answer | a queue id and a link to sign |
+
+so a step that only **reads** chain state calls the tool box: a typed
+helper from `@near-kit-tool-box/fun`, or `generic_contract_view_fun_json`
+for a view that has no dedicated helper. a step that **writes** builds
+a queue payload — `{ contractId, method, args, gas, deposit }` — and
+hands it to the queue helpers, `queue_tx.ts` or `queue_swap.ts`.
+
+**the tool box is never used to interact with a contract.** its
+`*_fun_json` helpers that CALL are reference material: take the
+argument shape, the gas, and the deposit from them, but emit a queue
+payload instead of sending. never `near.call`, never
+`generic_contract_call_fun`, never `generic_contract_call_wallet` — the
+last one needs a browser wallet, and a skill bin runs in a terminal
+with no wallet and must never sign anything.
+
+---
+
+#### WORKING ON THE SKILLS
+
+this library is a git repo of skills, and it is worked on like one:
+
+`git pull` before you start, commit and push to `main` when you are
+done. never create a branch — the work goes onto `main` and is pushed
+from there.
+
+the facts a skill records come from the near kit tool boxes, and each
+source is a different strength of evidence. a **fun helper** — the
+function that builds and sends the exact JSON — is the strongest, and
+it proves the argument shape, the gas, and the deposit. a **typed
+contract** is hand-written and has been wrong once, so treat it as
+unconfirmed and check it. the **skill library** is the reference to
+write against, and the tool boxes win on a disagreement.
+
+verify a method against the deployed contract before writing it down:
+
+```sh
+near contract inspect <contract_id> network-config mainnet now
+```
+
+a fact in none of the sources is recorded as **not documented yet**,
+never guessed. and the repo holds only truth: when something is
+added or fixed, say what is true, not what the old mistake was.
+
+---
+
 #### WHY A QUEUE AND NOT A TRANSACTION
 
 the engine's queue is a batch of calls for a human to sign in one

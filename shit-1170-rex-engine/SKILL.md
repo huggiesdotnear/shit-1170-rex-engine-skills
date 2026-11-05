@@ -34,6 +34,25 @@ wallet. so:
   argument shape, gas, and deposit, but emit a queue payload instead
   of sending.
 
+**the split is where the reads come from and where the writes go.**
+
+| side | what it uses | why |
+| --- | --- | --- |
+| **view calls** | the near-kit tool box, directly | a view is a read. the tool box has a typed helper for it, it needs no API key and no engine account, and it answers with a validated shape. so the skill calls the tool box itself. |
+| **contract interaction** | the queue helpers — `queue_tx.ts`, `queue_swap.ts` | the agent does not sign and does not send. a write becomes data: a queue payload the engine holds for a human to sign. |
+
+so the near-kit tool box supplies the **facts** of a contract — the
+argument shape, the gas, the deposit — and the queue helpers carry
+the **action**. when a skill needs to know a method's arguments, it
+reads the tool box. when it needs to do something, it queues.
+
+**do not use the tool box to interact with a contract.** the tool
+box's `*_fun_json` helpers that CALL are for reference only, and
+`generic_contract_call_wallet` needs a browser wallet this skill does
+not have. a skill bin runs in a terminal, has no wallet, and must
+never sign anything. the queue helpers are the only way a write
+leaves a skill.
+
 the chain reads go through the near-kit tool box —
 `@near-kit-tool-box/fun` for the typed helpers and
 `@near-kit-tool-box/env` for the server-side client. the client is

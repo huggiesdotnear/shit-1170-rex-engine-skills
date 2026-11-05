@@ -155,7 +155,7 @@ it.
 
 #### NEAR-KIT TOOL BOX SKILLS
 
-the contract reference skills this library is sourced from.
+the contract reference skills this library is written against.
 
 - <https://github.com/sleetplayground/near-kit-tool-box-skills>
 
@@ -167,6 +167,32 @@ the tool boxes themselves:
 
 - <https://github.com/sleet-js/near-kit-tool-box-ts>
 - <https://github.com/sleet-rs/near-kit-tool-box-rs>
+
+**where a fact comes from, and how strong it is.**
+
+| source | what it is | how strong |
+| --- | --- | --- |
+| a **fun helper** in the TS or RUST tool box | the function that builds and sends the exact JSON | strongest — it proves the argument shape, the gas, and the deposit |
+| a **typed contract** in the RUST tool box | a hand-written wrapper | weaker — it has been wrong once, so check it before use |
+| the **skill library** | the written reference per contract | the reference to write against; the tool boxes win on a disagreement |
+| `near contract inspect` | the deployed build's own ABI | authoritative for the method list |
+
+a fun helper proves the **shape** of the arguments, not that the
+method exists. near-sdk only exports methods inside a `#[near]` impl
+block — a plain `pub fn` on the contract is not callable — so check
+the contract's own method list before documenting a method as
+callable. a fact in none of these is recorded as **not documented
+yet**, never guessed.
+
+`near contract inspect` reports the build that account runs, not the
+newest build, so check each account you intend to call.
+
+**the tool box is for reads; the queue is for writes.** a view call
+goes to the tool box directly. a state-changing call goes to the
+queue helpers, and a human signs it. the tool box's `*_fun_json`
+helpers that CALL are reference material — read the argument shape,
+gas, and deposit from them, but emit a queue payload rather than
+sending.
 
 ---
 

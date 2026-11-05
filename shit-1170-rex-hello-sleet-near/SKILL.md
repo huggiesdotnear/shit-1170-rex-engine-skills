@@ -38,6 +38,21 @@ wallet. so:
 for a human to sign in one wallet popup. your job ends when the batch
 is queued and explained. never claim a transaction was sent.
 
+**the split is where the reads come from and where the writes go.**
+
+- **view calls** go to the near-kit tool box, directly — here,
+  `greeting_get_greeting_fun_json` reads the greeting.
+- **contract interaction** goes to the queue helpers. the agent does
+  not sign and does not send — a write becomes a queue payload the
+  engine holds for a human.
+
+the tool box supplies the **facts** of a contract — the argument
+shape, the gas, the deposit. the queue helpers carry the **action**.
+never use the tool box to interact with a contract: its `*_fun_json`
+helpers that CALL are reference material, and
+`generic_contract_call_wallet` needs a browser wallet this skill does
+not have.
+
 ---
 
 #### THE TOOLS
