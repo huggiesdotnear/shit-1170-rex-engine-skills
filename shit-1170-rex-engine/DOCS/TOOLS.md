@@ -1,6 +1,10 @@
 # TOOLS
 
-the sources used by the shit-1170 rex skills.
+the sources used by the shit-1170 rex engine skill.
+
+this file is scoped to the engine skill. for the whole library — every
+skill, every published package, and the tool box sources — see the
+library's [TOOLS.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/DOCS/TOOLS.md).
 
 ---
 
@@ -68,13 +72,13 @@ generic reader for the methods that have no dedicated helper yet.
 
 `@near-kit-tool-box/env` is the client setup for server-side scripts.
 it reads `NEAR_KIT_NETWORK` from the environment and defaults to
-**testnet**. these skills default to **mainnet**, so they build the
-client themselves with `new Near({ network })` from the `near-kit`
+**testnet**. this skill defaults to **mainnet**, so it builds the
+client itself with `new Near({ network })` from the `near-kit`
 package (the tool box depends on `near-kit` ^0.20.2) rather than
 using the env package's default client.
 
 `@near-kit-tool-box/web` is the BROWSER-wallet variant: it needs a
-browser wallet and `localStorage`. the frontend uses it. the skills do
+browser wallet and `localStorage`. the frontend uses it. this skill does
 not — a skill bin runs in a terminal, has no wallet, and must never
 sign anything.
 

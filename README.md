@@ -33,6 +33,11 @@ set `SHIT_1170_REX_HOME` to use another directory.
 - [WORKFLOW.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/WORKFLOW.md) — the shared agent workflow
 - [ENGINE.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/ENGINE.md) — the engine's routes, data model, and pages
 
+there are two TOOLS.md files, on purpose. the one above covers the
+whole library; the engine skill keeps its own, scoped to that skill's
+sources, at
+[shit-1170-rex-engine/DOCS/TOOLS.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/TOOLS.md).
+
 ## the rule every skill follows
 
 the agent prepares the transaction and queues it. the human signs it.
