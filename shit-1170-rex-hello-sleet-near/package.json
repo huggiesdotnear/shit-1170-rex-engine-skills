@@ -32,11 +32,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@huggies/shit-1170-rex-engine-middleman": "^0.0.5",
     "@near-kit-tool-box/fun": "0.3.0",
     "near-kit": "^0.20.2"
   },
   "devDependencies": {
-    "@huggies/shit-1170-rex-engine-skill": "file:../shit-1170-rex-engine",
     "@types/bun": "latest",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2"

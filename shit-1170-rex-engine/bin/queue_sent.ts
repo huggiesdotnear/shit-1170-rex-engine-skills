@@ -1,16 +1,18 @@
 #!/usr/bin/env bun
 import { readFile } from "node:fs/promises";
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-  shit_1170_quiet_fun,
-} from "../src/json_io";
+  api_shit_1170_swap_queue_sent_post,
+  api_shit_1170_tx_queue_sent_post,
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+  quiet_fun,
+  type SHIT_1170_TX_QUEUE_HASH_REQUEST,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 import { shit_1170_account_resolve_fun } from "../src/keyring";
 import {
   shit_1170_base_url_fun,
@@ -21,11 +23,7 @@ import {
   shit_1170_queue_record_get_fun,
   shit_1170_queue_record_put_fun,
 } from "../src/local_queue";
-import {
-  api_shit_1170_swap_queue_sent_post,
-  api_shit_1170_tx_queue_sent_post,
-  type SHIT_1170_TX_QUEUE_HASH_REQUEST,
-} from "@huggies/shit-1170-rex-engine-middleman";
+
 
 const SHIT_1170_CLIENT_STATUSES = ["succeeded", "failed"] as const;
 type SHIT_1170_CLIENT_STATUS = (typeof SHIT_1170_CLIENT_STATUSES)[number];
@@ -81,10 +79,12 @@ function validate_hashes_fun(
 }
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["from-server", "help"],
+  });
   const command = args.positional[0] ?? "help";
-  if (command === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  if (command === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: [
         "queue_sent tx --queue <id> (--from-server | --hashes <tx-hashes.json>) [--account signer]",
@@ -98,16 +98,16 @@ async function main_fun(): Promise<void> {
   }
 
   const profile = await shit_1170_account_resolve_fun(
-    shit_1170_flag_string_fun(args, "account"),
+    args_string_fun(args, "account"),
   );
   const baseUrl = shit_1170_base_url_fun(
-    shit_1170_flag_string_fun(args, "base-url") ?? profile.baseUrl,
+    args_string_fun(args, "base-url") ?? profile.baseUrl,
   );
 
   if (command === "tx") {
-    const queueId = shit_1170_require_string_fun(args, "queue");
-    const hashesFile = shit_1170_flag_string_fun(args, "hashes");
-    const fromServer = shit_1170_flag_bool_fun(args, "from-server");
+    const queueId = args_require_string_fun(args, "queue");
+    const hashesFile = args_string_fun(args, "hashes");
+    const fromServer = args_bool_fun(args, "from-server");
 
     if (hashesFile && fromServer) {
       throw new Error(
@@ -137,12 +137,12 @@ async function main_fun(): Promise<void> {
       }));
       from = "server";
     } else {
-      const file = shit_1170_require_string_fun(args, "hashes");
+      const file = args_require_string_fun(args, "hashes");
       hashes = validate_hashes_fun(JSON.parse(await readFile(file, "utf8")));
       from = "file";
     }
 
-    const result = await shit_1170_quiet_fun(() =>
+    const result = await quiet_fun(() =>
       api_shit_1170_tx_queue_sent_post(
         baseUrl,
         queueId,
@@ -157,7 +157,7 @@ async function main_fun(): Promise<void> {
       request: existing?.request ?? { txHashes: hashes },
       response: result as unknown as Record<string, unknown>,
     });
-    shit_1170_print_json_fun({
+    print_json_fun({
       ok: true,
       hashesFrom: from,
       queue: result,
@@ -166,12 +166,12 @@ async function main_fun(): Promise<void> {
   }
 
   if (command === "swap") {
-    const swapId = shit_1170_require_string_fun(args, "swap");
-    const statusRaw = shit_1170_flag_string_fun(args, "status");
+    const swapId = args_require_string_fun(args, "swap");
+    const statusRaw = args_string_fun(args, "status");
     const status = statusRaw === undefined ? undefined : parse_status_fun(statusRaw);
-    const amountOut = shit_1170_flag_string_fun(args, "amount-out");
+    const amountOut = args_string_fun(args, "amount-out");
 
-    let txHash = shit_1170_flag_string_fun(args, "tx-hash");
+    let txHash = args_string_fun(args, "tx-hash");
     let from: "flag" | "server" = "flag";
 
     if (!txHash) {
@@ -187,7 +187,7 @@ async function main_fun(): Promise<void> {
       }
     }
 
-    const result = await shit_1170_quiet_fun(() =>
+    const result = await quiet_fun(() =>
       api_shit_1170_swap_queue_sent_post(
         baseUrl,
         swapId,
@@ -206,7 +206,7 @@ async function main_fun(): Promise<void> {
       request: existing?.request ?? { txHash, status, amountOut },
       response: result as unknown as Record<string, unknown>,
     });
-    shit_1170_print_json_fun({
+    print_json_fun({
       ok: true,
       hashFrom: from,
       swap: result,
@@ -218,6 +218,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

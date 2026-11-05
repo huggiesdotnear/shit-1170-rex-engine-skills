@@ -1,15 +1,14 @@
 #!/usr/bin/env bun
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-  shit_1170_quiet_fun,
-} from "../src/json_io";
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+  quiet_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 
 const SHIT_1170_TX_BASE_URLS = {
   mainnet: "https://tx.main.fastnear.com",
@@ -116,9 +115,11 @@ function extract_transaction_fun(payload: unknown): unknown {
 }
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
-  if (args.positional[0] === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help"],
+  });
+  if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: [
         "tx_status --tx-hash <hash> [--signer <account_id>] [--network mainnet|testnet]",
@@ -127,16 +128,16 @@ async function main_fun(): Promise<void> {
     return;
   }
 
-  const txHash = shit_1170_require_string_fun(args, "tx-hash");
-  const signer = shit_1170_flag_string_fun(args, "signer");
+  const txHash = args_require_string_fun(args, "tx-hash");
+  const signer = args_string_fun(args, "signer");
   const network = parse_network_fun(
-    shit_1170_flag_string_fun(args, "network") ?? "mainnet",
+    args_string_fun(args, "network") ?? "mainnet",
   );
   const baseUrl = SHIT_1170_TX_BASE_URLS[network];
 
-  // stdout must stay pure json. `shit_1170_quiet_fun` moves any
+  // stdout must stay pure json. `quiet_fun` moves any
   // stray console.log to stderr for the length of the call.
-  const { response, text } = await shit_1170_quiet_fun(async () => {
+  const { response, text } = await quiet_fun(async () => {
     const response = await fetch(`${baseUrl}/v0/transactions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -177,7 +178,7 @@ async function main_fun(): Promise<void> {
     );
   }
 
-  shit_1170_print_json_fun({
+  print_json_fun({
     ok: true,
     txHash,
     status,
@@ -187,6 +188,6 @@ async function main_fun(): Promise<void> {
 
 main_fun()
   .catch((err) => {
-    shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+    print_error_fun(err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
   });

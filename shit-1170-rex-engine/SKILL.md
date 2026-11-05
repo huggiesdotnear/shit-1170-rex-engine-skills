@@ -128,7 +128,8 @@ every queued item is written under:
 ${HOME}/.shit-1170-rex-engine/
 ├── accounts/
 │   └── <account_id>.json    # one private api key file per account
-├── contacts.json            # the ft skill's contact list
+├── contacts.json            # the contact list — the ft skill's, and this
+│                            # skill's too. one file, both skills.
 └── queue/
     ├── index.json           # the list of every local record
     ├── tx/<queue_id>.json   # one local copy per queued batch

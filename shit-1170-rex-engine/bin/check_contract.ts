@@ -1,20 +1,19 @@
 #!/usr/bin/env bun
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../src/args";
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
 import {
   SHIT_1170_VIEW_CALL_ERROR,
   shit_1170_account_fun,
   shit_1170_network_fun,
   shit_1170_view_fun,
 } from "../src/chain";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-} from "../src/json_io";
+
 
 // a probe that fails because the ARGUMENTS were wrong still proves
 // the method exists: the contract resolved it and ran it.
@@ -24,9 +23,11 @@ import {
 // module says which it was.
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
-  if (args.positional[0] === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help"],
+  });
+  if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: [
         "check_contract --id <account_id> [--network mainnet|testnet] [--methods method_a,method_b]",
@@ -35,12 +36,12 @@ async function main_fun(): Promise<void> {
     return;
   }
 
-  const accountId = shit_1170_require_string_fun(args, "id");
+  const accountId = args_require_string_fun(args, "id");
   const network = shit_1170_network_fun(
-    shit_1170_flag_string_fun(args, "network"),
+    args_string_fun(args, "network"),
   );
 
-  const methods = shit_1170_flag_string_fun(args, "methods")
+  const methods = args_string_fun(args, "methods")
     ?.split(",")
     .map((value) => value.trim())
     .filter(Boolean) ?? [];
@@ -82,7 +83,7 @@ async function main_fun(): Promise<void> {
     exists = false;
   }
 
-  shit_1170_print_json_fun({
+  print_json_fun({
     ok: true,
     accountId,
     network,
@@ -94,6 +95,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

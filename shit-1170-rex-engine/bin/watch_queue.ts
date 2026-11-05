@@ -30,15 +30,14 @@
 // care what the work is. with no filter, every new post matches.
 
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_number_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-} from "../src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-} from "../src/json_io";
+  args_bool_fun,
+  args_number_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 import { shit_1170_base_url_fun } from "../src/engine";
 import {
   shit_1170_queue_record_get_fun,
@@ -101,7 +100,9 @@ async function refresh_fun(
 }
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help", "hide-sent"],
+  });
 
   // --- WHY THERE IS NO COMMAND WORD ---
   // every other bin takes a command as its first word. this one does
@@ -109,9 +110,9 @@ async function main_fun(): Promise<void> {
   // unless it was asked for help. the only positional that means
   // anything is `help`.
   const wants_help =
-    args.positional[0] === "help" || shit_1170_flag_bool_fun(args, "help");
+    args.positional[0] === "help" || args_bool_fun(args, "help");
   if (wants_help) {
-    shit_1170_print_json_fun({
+    print_json_fun({
       ok: true,
       usage: [
         "watch_queue [--queue <id>] [--for <seconds>] [--until any|sent|succeeded|failed]",
@@ -125,13 +126,13 @@ async function main_fun(): Promise<void> {
   }
 
   const profile = await shit_1170_account_resolve_fun(
-    shit_1170_flag_string_fun(args, "account"),
+    args_string_fun(args, "account"),
   );
   const baseUrl = shit_1170_base_url_fun(
-    shit_1170_flag_string_fun(args, "base-url") ?? profile.baseUrl,
+    args_string_fun(args, "base-url") ?? profile.baseUrl,
   );
 
-  const seconds = shit_1170_flag_number_fun(
+  const seconds = args_number_fun(
     args,
     "for",
     SHIT_1170_WATCH_DEFAULT_SECONDS,
@@ -140,16 +141,16 @@ async function main_fun(): Promise<void> {
     throw new Error("--for must be a positive number of seconds");
   }
 
-  const until = parse_until_fun(shit_1170_flag_string_fun(args, "until"));
+  const until = parse_until_fun(args_string_fun(args, "until"));
 
   const filter: SHIT_1170_WATCH_FILTER = {
-    account_id: shit_1170_flag_string_fun(args, "account-id"),
-    contract_id: shit_1170_flag_string_fun(args, "contract-id"),
-    method: shit_1170_flag_string_fun(args, "method"),
-    token_in: shit_1170_flag_string_fun(args, "token-in"),
-    token_out: shit_1170_flag_string_fun(args, "token-out"),
-    hide_sent: shit_1170_flag_bool_fun(args, "hide-sent"),
-    id: shit_1170_flag_string_fun(args, "queue"),
+    account_id: args_string_fun(args, "account-id"),
+    contract_id: args_string_fun(args, "contract-id"),
+    method: args_string_fun(args, "method"),
+    token_in: args_string_fun(args, "token-in"),
+    token_out: args_string_fun(args, "token-out"),
+    hide_sent: args_bool_fun(args, "hide-sent"),
+    id: args_string_fun(args, "queue"),
   };
 
   // --- THE OWN ACCOUNT ------------------
@@ -301,7 +302,7 @@ async function main_fun(): Promise<void> {
       : `the watch ended after ${seconds}s and the socket was NOT connected — nothing could have arrived`,
   );
 
-  shit_1170_print_json_fun({
+  print_json_fun({
     ok: true,
     watched: seconds,
     until,
@@ -312,6 +313,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

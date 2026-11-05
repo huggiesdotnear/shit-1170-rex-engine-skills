@@ -1,7 +1,6 @@
 export * from "./types";
 export * from "./paths";
 export * from "./json_io";
-export * from "./args";
 export * from "./chain";
 export * from "./queue_payload";
 export * from "./keyring";

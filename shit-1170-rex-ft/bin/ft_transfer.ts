@@ -1,15 +1,14 @@
 #!/usr/bin/env bun
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../../shit-1170-rex-engine/src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-} from "../../shit-1170-rex-engine/src/json_io";
-import { shit_1170_contact_has_fun } from "../../shit-1170-rex-engine/src/contacts";
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
+import { shit_1170_contact_has_fun } from "../src/contacts";
 import {
   shit_1170_ft_transfer_call_queue_call_fun,
   shit_1170_ft_transfer_queue_call_fun,
@@ -32,9 +31,11 @@ import {
 // looked at the address and said yes.
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
-  if (args.positional[0] === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["force", "help", "with-storage-deposit"],
+  });
+  if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: [
         "ft_transfer --token <token_id> --receiver <account_id> --amount <unit_amount> [--memo text] [--gas tgas] [--deposit yocto]",
@@ -45,15 +46,15 @@ async function main_fun(): Promise<void> {
     return;
   }
 
-  const token = shit_1170_require_string_fun(args, "token");
-  const receiver = shit_1170_require_string_fun(args, "receiver");
-  const amount = shit_1170_require_string_fun(args, "amount");
-  const force = shit_1170_flag_bool_fun(args, "force");
-  const msg = shit_1170_flag_string_fun(args, "msg");
+  const token = args_require_string_fun(args, "token");
+  const receiver = args_require_string_fun(args, "receiver");
+  const amount = args_require_string_fun(args, "amount");
+  const force = args_bool_fun(args, "force");
+  const msg = args_string_fun(args, "msg");
 
   const known = await shit_1170_contact_has_fun(receiver);
   if (!known && !force) {
-    shit_1170_print_error_fun(
+    print_error_fun(
       `${receiver} is not on the contacts list; confirm the address with the human and use --force only after approval`,
     );
     process.exitCode = 2;
@@ -68,33 +69,33 @@ async function main_fun(): Promise<void> {
         receiverId: receiver,
         amount,
         msg,
-        memo: shit_1170_flag_string_fun(args, "memo"),
-        gas: shit_1170_flag_string_fun(args, "gas"),
-        deposit: shit_1170_flag_string_fun(args, "deposit"),
+        memo: args_string_fun(args, "memo"),
+        gas: args_string_fun(args, "gas"),
+        deposit: args_string_fun(args, "deposit"),
       })
     : shit_1170_ft_transfer_queue_call_fun({
         tokenId: token,
         receiverId: receiver,
         amount,
-        memo: shit_1170_flag_string_fun(args, "memo"),
-        gas: shit_1170_flag_string_fun(args, "gas"),
-        deposit: shit_1170_flag_string_fun(args, "deposit"),
+        memo: args_string_fun(args, "memo"),
+        gas: args_string_fun(args, "gas"),
+        deposit: args_string_fun(args, "deposit"),
       });
 
   // the storage trap. when the receiver has no storage on the token,
   // the deposit has to land before the transfer delivers anything.
   const queueCalls = [queueCall];
-  if (shit_1170_flag_bool_fun(args, "with-storage-deposit")) {
+  if (args_bool_fun(args, "with-storage-deposit")) {
     queueCalls.unshift(
       shit_1170_storage_deposit_queue_call_fun({
         tokenId: token,
-        deposit: shit_1170_flag_string_fun(args, "storage-deposit"),
-        gas: shit_1170_flag_string_fun(args, "storage-gas"),
+        deposit: args_string_fun(args, "storage-deposit"),
+        gas: args_string_fun(args, "storage-gas"),
       }),
     );
   }
 
-  shit_1170_print_json_fun({
+  print_json_fun({
     ok: true,
     action: "queue_ft_transfer",
     transactions: queueCalls,
@@ -105,6 +106,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

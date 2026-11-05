@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-} from "../src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-} from "../src/json_io";
+  args_bool_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 import {
   shit_1170_queue_record_get_fun,
   shit_1170_queue_records_list_fun,
@@ -39,9 +38,11 @@ async function sync_one_fun(
 }
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help"],
+  });
   const command = args.positional[0] ?? "help";
-  const baseUrl = shit_1170_flag_string_fun(args, "base-url");
+  const baseUrl = args_string_fun(args, "base-url");
 
   if (command === "all") {
     const records = await shit_1170_queue_records_list_fun();
@@ -49,7 +50,7 @@ async function main_fun(): Promise<void> {
     for (const record of records) {
       results.push(await sync_one_fun(record.kind, record.id, baseUrl));
     }
-    shit_1170_print_json_fun({ ok: true, results });
+    print_json_fun({ ok: true, results });
     return;
   }
 
@@ -60,12 +61,12 @@ async function main_fun(): Promise<void> {
       throw new Error("usage: sync_queue one <tx|swap> <id>");
     }
     const result = await sync_one_fun(kind, id, baseUrl);
-    shit_1170_print_json_fun({ ok: true, result });
+    print_json_fun({ ok: true, result });
     return;
   }
 
-  if (command === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  if (command === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: ["sync_queue all", "sync_queue one <tx|swap> <id>"],
     });
@@ -76,6 +77,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

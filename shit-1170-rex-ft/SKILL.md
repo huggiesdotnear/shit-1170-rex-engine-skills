@@ -260,6 +260,11 @@ because there is no ambiguity about what they mean.
 ${HOME}/.shit-1170-rex-engine/contacts.json
 ```
 
+**this skill owns the contact list.** the contact check is the FT
+skill's safety check, and the transfer is what it guards. the engine
+skill reads the same file — there is one list, and a contact added
+here is the contact the engine skill sees.
+
 **a transfer to an account that is not on the list is refused unless
 the human explicitly approves it and `--force` is passed.**
 

@@ -5,15 +5,14 @@ import {
   ft_total_supply_fun_json,
 } from "@near-kit-tool-box/fun";
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../../shit-1170-rex-engine/src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-} from "../../shit-1170-rex-engine/src/json_io";
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 import {
   shit_1170_network_fun,
   shit_1170_near_client_fun,
@@ -36,18 +35,20 @@ interface SHIT_1170_STORAGE_BOUNDS {
 }
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
-  if (args.positional[0] === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help"],
+  });
+  if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: ["ft_metadata --token <token_id> [--network mainnet|testnet]"],
     });
     return;
   }
 
-  const token = shit_1170_require_string_fun(args, "token");
+  const token = args_require_string_fun(args, "token");
   const network = shit_1170_network_fun(
-    shit_1170_flag_string_fun(args, "network"),
+    args_string_fun(args, "network"),
   );
 
   const near = shit_1170_near_client_fun(network);
@@ -78,7 +79,7 @@ async function main_fun(): Promise<void> {
     storageBalanceBounds = null;
   }
 
-  shit_1170_print_json_fun({
+  print_json_fun({
     ok: true,
     token,
     network,
@@ -89,6 +90,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

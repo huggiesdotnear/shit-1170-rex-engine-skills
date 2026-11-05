@@ -1,14 +1,13 @@
 #!/usr/bin/env bun
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-} from "../src/json_io";
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 import {
   shit_1170_contact_add_fun,
   shit_1170_contact_has_fun,
@@ -17,45 +16,47 @@ import {
 } from "../src/contacts";
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help"],
+  });
   const command = args.positional[0] ?? "help";
 
   if (command === "list") {
     const contacts = await shit_1170_contacts_read_fun();
-    shit_1170_print_json_fun({ ok: true, contacts });
+    print_json_fun({ ok: true, contacts });
     return;
   }
 
   if (command === "add") {
     const contact = await shit_1170_contact_add_fun(
-      shit_1170_require_string_fun(args, "account"),
+      args_require_string_fun(args, "account"),
       {
-        label: shit_1170_flag_string_fun(args, "label"),
-        note: shit_1170_flag_string_fun(args, "note"),
+        label: args_string_fun(args, "label"),
+        note: args_string_fun(args, "note"),
       },
     );
-    shit_1170_print_json_fun({ ok: true, contact });
+    print_json_fun({ ok: true, contact });
     return;
   }
 
   if (command === "remove") {
     const removed = await shit_1170_contact_remove_fun(
-      shit_1170_require_string_fun(args, "account"),
+      args_require_string_fun(args, "account"),
     );
-    shit_1170_print_json_fun({ ok: true, removed });
+    print_json_fun({ ok: true, removed });
     return;
   }
 
   if (command === "has") {
     const has = await shit_1170_contact_has_fun(
-      shit_1170_require_string_fun(args, "account"),
+      args_require_string_fun(args, "account"),
     );
-    shit_1170_print_json_fun({ ok: true, has });
+    print_json_fun({ ok: true, has });
     return;
   }
 
-  if (command === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  if (command === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: [
         "contacts list",
@@ -71,6 +72,6 @@ async function main_fun(): Promise<void> {
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

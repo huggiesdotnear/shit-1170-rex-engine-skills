@@ -1,15 +1,14 @@
 #!/usr/bin/env bun
 import {
-  shit_1170_flag_bool_fun,
-  shit_1170_flag_string_fun,
-  shit_1170_parse_args_fun,
-  shit_1170_require_string_fun,
-} from "../src/args";
-import {
-  shit_1170_print_error_fun,
-  shit_1170_print_json_fun,
-  shit_1170_quiet_fun,
-} from "../src/json_io";
+  args_bool_fun,
+  args_require_string_fun,
+  args_string_fun,
+  parse_args_fun,
+  print_error_fun,
+  print_json_fun,
+  quiet_fun,
+} from "@huggies/shit-1170-rex-engine-middleman";
+
 import { api_intear_balances_get } from "@sleet-js/middleman-intear-api";
 
 const SHIT_1170_BALANCE_SOURCES = ["direct", "native", "rhea"] as const;
@@ -35,9 +34,11 @@ function parse_sources_fun(value: string): SHIT_1170_BALANCE_SOURCE[] {
 }
 
 async function main_fun(): Promise<void> {
-  const args = shit_1170_parse_args_fun(process.argv.slice(2));
-  if (args.positional[0] === "help" || shit_1170_flag_bool_fun(args, "help")) {
-    shit_1170_print_json_fun({
+  const args = parse_args_fun(process.argv.slice(2), {
+    boolean_flags: ["help"],
+  });
+  if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
+    print_json_fun({
       ok: true,
       usage: [
         "balances --account <account_id> [--sources direct,native,rhea] [--tokens token_a,token_b]",
@@ -46,26 +47,26 @@ async function main_fun(): Promise<void> {
     return;
   }
 
-  const account = shit_1170_require_string_fun(args, "account");
+  const account = args_require_string_fun(args, "account");
   const sources = parse_sources_fun(
-    shit_1170_flag_string_fun(args, "sources") ?? "direct,native",
+    args_string_fun(args, "sources") ?? "direct,native",
   );
-  const tokens = shit_1170_flag_string_fun(args, "tokens")
+  const tokens = args_string_fun(args, "tokens")
     ?.split(",")
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const result = await shit_1170_quiet_fun(() =>
+  const result = await quiet_fun(() =>
     api_intear_balances_get({
       account,
       sources,
       ...(tokens ? { tokens } : {}),
     }),
   );
-  shit_1170_print_json_fun({ ok: true, balances: result });
+  print_json_fun({ ok: true, balances: result });
 }
 
 main_fun().catch((err) => {
-  shit_1170_print_error_fun(err instanceof Error ? err.message : String(err));
+  print_error_fun(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

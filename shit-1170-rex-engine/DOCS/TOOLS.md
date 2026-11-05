@@ -112,9 +112,10 @@ it and one place to change it.
 - `@near-kit-tool-box/fun` — typed, Zod-validated NEAR contract helpers
 - `@near-kit-tool-box/env` — the server-side NEAR KIT client setup
 
-the tool box packages are v0.3.0. the middleman is v0.0.4 — the live
-feed's typed client, `api_shit_1170_feed_ws`, arrived in v0.0.3, and
-its `on_connect` callback in v0.0.4.
+the tool box packages are v0.3.0. the middleman is v0.0.5 — the live
+feed's typed client, `api_shit_1170_feed_ws`, arrived in v0.0.3, its
+`on_connect` callback in v0.0.4, and the argument parsing and the JSON
+printing in v0.0.5.
 
 `@near-kit-tool-box/fun` is the read side: one helper per contract
 method, each one a VIEW call. `generic_contract_view_fun_json` is the
@@ -134,6 +135,27 @@ sign anything.
 
 the rex engine does not proxy the third-party APIs. the browser and the
 bins call them directly.
+
+**the middleman also holds the tool primitives every bin uses**: the
+argument parsing (`parse_args_fun` and its accessors) and the JSON
+printing (`quiet_fun`, `print_json_fun`, `print_error_fun`).
+
+they live there because the middleman is what makes stdout noisy — it
+logs every request and response with `console.log`, which lands on
+stdout. a tool that promises pure JSON on stdout has to move that
+banner, so the quieting and the printing belong next to the logging
+that makes them necessary.
+
+> #### A FLAG WITH NO VALUE IS AN ERROR
+>
+> the parser is strict: `--limit` with nothing after it is a typo, and
+> a bin that read it as "no limit" would quietly do the wrong thing. a
+> bin declares its boolean flags, so a boolean never swallows the next
+> positional.
+
+**the skills do not depend on each other.** each one is standalone: it
+imports the middleman by name and keeps its own source. a skill copied
+out of this repo on its own still runs.
 
 **the tool box is for reads.** a view call goes to the tool box
 directly, because a view needs no key and no engine account and the
