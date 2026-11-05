@@ -25,10 +25,6 @@ export function shit_1170_swap_queue_dir_fun(): string {
   return join(shit_1170_queue_dir_fun(), "swap");
 }
 
-export function shit_1170_contacts_path_fun(): string {
-  return join(shit_1170_home_dir_fun(), "contacts.json");
-}
-
 export function shit_1170_queues_path_fun(): string {
   return join(shit_1170_queue_dir_fun(), "index.json");
 }

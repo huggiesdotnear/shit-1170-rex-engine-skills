@@ -20,10 +20,12 @@
 // guarantee is reading more than is there.
 
 import { ft_methods_const } from "@near-kit-tool-box/fun";
-import { shit_1170_queue_call_fun } from "./queue_payload";
-import type { SHIT_1170_QUEUE_CALL } from "./queue_payload";
+import {
+  queue_call_fun,
+  type QUEUE_CALL,
+} from "@huggies/shit-1170-rex-engine-middleman";
 
-export type { SHIT_1170_QUEUE_CALL };
+export type { QUEUE_CALL };
 
 export interface SHIT_1170_FT_TRANSFER_REQUEST {
   tokenId: string;
@@ -167,11 +169,11 @@ export function shit_1170_ft_transfer_call_args_fun(
 
 export function shit_1170_ft_transfer_queue_call_fun(
   request: SHIT_1170_FT_TRANSFER_REQUEST,
-): SHIT_1170_QUEUE_CALL {
+): QUEUE_CALL {
   const tokenId = request.tokenId.trim();
   if (!tokenId) throw new Error("token id is required");
 
-  return shit_1170_queue_call_fun({
+  return queue_call_fun({
     contractId: tokenId,
     method: ft_methods_const.ft_transfer,
     args: shit_1170_ft_transfer_args_fun(
@@ -192,11 +194,11 @@ export function shit_1170_ft_transfer_call_queue_call_fun(request: {
   memo?: string;
   gas?: string;
   deposit?: string;
-}): SHIT_1170_QUEUE_CALL {
+}): QUEUE_CALL {
   const tokenId = request.tokenId.trim();
   if (!tokenId) throw new Error("token id is required");
 
-  return shit_1170_queue_call_fun({
+  return queue_call_fun({
     contractId: tokenId,
     method: ft_methods_const.ft_transfer_call,
     args: shit_1170_ft_transfer_call_args_fun(
@@ -216,11 +218,11 @@ export function shit_1170_storage_deposit_queue_call_fun(request: {
   tokenId: string;
   deposit?: string;
   gas?: string;
-}): SHIT_1170_QUEUE_CALL {
+}): QUEUE_CALL {
   const tokenId = request.tokenId.trim();
   if (!tokenId) throw new Error("token id is required");
 
-  return shit_1170_queue_call_fun({
+  return queue_call_fun({
     contractId: tokenId,
     method: ft_methods_const.storage_deposit,
     args: {},

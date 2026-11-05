@@ -7,17 +7,6 @@ export interface SHIT_1170_ACCOUNT_PROFILE {
   updatedAt?: number;
 }
 
-export interface SHIT_1170_CONTACT {
-  accountId: string;
-  label?: string;
-  note?: string;
-  createdAt?: number;
-}
-
-export interface SHIT_1170_CONTACTS_FILE {
-  contacts: SHIT_1170_CONTACT[];
-}
-
 export interface SHIT_1170_LOCAL_QUEUE_RECORD {
   kind: "tx" | "swap";
   id: string;

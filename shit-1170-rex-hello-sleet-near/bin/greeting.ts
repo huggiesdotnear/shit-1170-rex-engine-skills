@@ -10,6 +10,7 @@ import {
   parse_args_fun,
   print_error_fun,
   print_json_fun,
+  queue_call_fun,
 } from "@huggies/shit-1170-rex-engine-middleman";
 
 import { shit_1170_hello_contract_id_fun } from "../src/index";
@@ -17,7 +18,6 @@ import {
   shit_1170_network_fun,
   shit_1170_near_client_fun,
 } from "../src/chain";
-import { shit_1170_queue_call_fun } from "../src/queue_payload";
 
 // read the greeting, or prepare the call that sets it.
 //
@@ -54,7 +54,7 @@ async function main_fun(): Promise<void> {
     const greeting = args_require_string_fun(args, "greeting");
     // the write is a QUEUE PAYLOAD, not a transaction. the engine
     // queues it and a human signs it.
-    const transaction = shit_1170_queue_call_fun({
+    const transaction = queue_call_fun({
       contractId,
       method: greeting_methods_const.set_greeting,
       args: { greeting },

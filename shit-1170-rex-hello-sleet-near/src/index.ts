@@ -17,10 +17,12 @@ import {
   greeting_contractid,
   greeting_methods_const,
 } from "@near-kit-tool-box/fun";
-import { shit_1170_queue_call_fun } from "./queue_payload";
-import type { SHIT_1170_QUEUE_CALL } from "./queue_payload";
+import {
+  queue_call_fun,
+  type QUEUE_CALL,
+} from "@huggies/shit-1170-rex-engine-middleman";
 
-export type { SHIT_1170_QUEUE_CALL };
+export type { QUEUE_CALL };
 
 export const SHIT_1170_HELLO_CONTRACT_IDS = {
   mainnet: "hello.sleet.near",
@@ -74,8 +76,8 @@ export function shit_1170_hello_set_greeting_queue_call_fun(
     gas?: string;
     deposit?: string;
   } = {},
-): SHIT_1170_QUEUE_CALL {
-  return shit_1170_queue_call_fun({
+): QUEUE_CALL {
+  return queue_call_fun({
     contractId:
       options.contractId ?? shit_1170_hello_contract_id_fun(options.network),
     method: greeting_methods_const.set_greeting,

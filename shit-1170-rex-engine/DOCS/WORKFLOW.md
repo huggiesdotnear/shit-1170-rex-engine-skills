@@ -137,6 +137,10 @@ the FT skill's contact list lives beside the accounts:
 ${HOME}/.shit-1170-rex-engine/contacts.json
 ```
 
+**the FT skill owns it** — the contact check is the FT skill's safety
+check, and the transfer is what it guards. the list is a file the two
+skills share, so a contact added in either is the contact both see.
+
 a transfer to an account that is not on the list is refused unless the
 human explicitly approves and the bin is run with `--force`. the check
 is there because a mistyped NEAR account id is a valid account id: it

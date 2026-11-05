@@ -192,19 +192,26 @@ the `kind` column says where the answer comes from:
 | `queue_sent.ts` | engine | report hashes and outcomes after the human sends |
 | `watch_queue.ts` | engine | watch the live feed, and refresh the local copy as it changes |
 | `tx_status.ts` | chain VIEW | read a transaction's receipt from the FastNear transactions API |
-| `contacts.ts` | local | manage the local contact list |
 | `check_contract.ts` | chain VIEW | verify an account and probe its methods on chain |
 | `check_receiver.ts` | chain VIEW | verify a receiver account exists on chain |
-| `ft_metadata.ts` | chain VIEW | read an FT's metadata, total supply, and storage bounds from the chain |
-| `ft_balance.ts` | chain VIEW | read one account's balance of one FT |
-| `greeting.ts` | chain VIEW | read a `hello.sleet.near` greeting, or prepare the call to set one |
 | `balances.ts` | engine | read direct, native, and Rhea balances like the website |
 | `holders.ts` | engine | read a token's holders like the website |
 | `token_info.ts` | engine | read token metadata like the website |
-| `ft_transfer.ts` | local | prepare an FT transfer queue payload, with contact-list safety checks |
 
-the chain VIEW reads — `check_contract.ts`, `check_receiver.ts`,
-`ft_balance.ts`, `ft_metadata.ts` and `greeting.ts` — talk to NEAR
+**this skill is the engine's own surface.** the token and contract
+skills have their own bins, and they are the better ones:
+
+- the **FT** skill has `ft_balance.ts` (with the token's decimals and
+  symbol), `ft_metadata.ts`, `ft_transfer.ts` (with the contact-list
+  check, `ft_transfer_call`, `--memo`, `--gas`, `--deposit` and
+  `--with-storage-deposit`) and `contacts.ts`.
+- the **greeting** skill has `greeting.ts`, for `hello.sleet.near`.
+
+use those skills for tokens and for the greeting contract. this skill
+queues the work and tracks it.
+
+the chain VIEW reads — `check_contract.ts`, `check_receiver.ts` and
+`tx_status.ts` — talk to NEAR
 through the near-kit tool box (`@near-kit-tool-box/fun` and
 `@near-kit-tool-box/env`). they need no API key and no engine
 account, so they are the right first step when the engine's key is not
