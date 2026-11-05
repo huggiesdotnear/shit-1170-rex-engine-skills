@@ -8,3 +8,4 @@ export * from "./keyring";
 export * from "./contacts";
 export * from "./local_queue";
 export * from "./engine";
+export * from "./watch";

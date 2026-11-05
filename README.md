@@ -43,6 +43,11 @@ sources, at
 the agent prepares the transaction and queues it. the human signs it.
 agents do not sign, send, or wait for a signature.
 
+the engine keeps the hash of every send, so the agent reads it back
+from the queue it queued — the human never pastes one into a chat. the
+live feed's websocket tells the agent WHEN something changed; the
+engine's own routes say what it is.
+
 =====================
 <br/>
 copyright 2026 by sleet.near

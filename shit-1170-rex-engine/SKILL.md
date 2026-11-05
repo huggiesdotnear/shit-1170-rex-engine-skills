@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-engine
-description: Propose, verify, queue, and track NEAR transactions and swaps with the shit-1170 rex engine. Use this skill whenever the user mentions shit-1170, shit-1170-rex-engine, the rex engine, a tx queue, a swap queue, queuing a transaction, proposing a transaction for signing, checking a queued transaction's outcome, or using @huggies/shit-1170-rex-engine-middleman — including when the user wants the agent to prepare NEAR contract calls without sending them. Also use it for the rex engine's website data: token holders, direct balances, internal DEX balances, token metadata, or account balances. Queue work for a human to sign; do not sign or send transactions yourself.
+description: Propose, verify, queue, and track NEAR transactions and swaps with the shit-1170 rex engine. Use this skill whenever the user mentions shit-1170, shit-1170-rex-engine, the rex engine, a tx queue, a swap queue, queuing a transaction, proposing a transaction for signing, checking a queued transaction's outcome, or using @huggies/shit-1170-rex-engine-middleman — including when the user wants the agent to prepare NEAR contract calls without sending them. Also use it for the rex engine's website data: token holders, direct balances, internal DEX balances, token metadata, or account balances, and for waiting on the live feed when a human is about to sign — the transaction hash comes from the engine, so the human never has to paste one. Queue work for a human to sign; do not sign or send transactions yourself.
 ---
 
 # shit-1170 rex engine
@@ -104,8 +104,15 @@ fail silently.
 7. **report the queue id, the link, and the local copy path** — the id
    and the link are how the human signs it; the local copy is the
    user's backup and their record of what worked.
-8. **sync later** — `bin/sync_queue.ts` refreshes the local record with
-   the server's current status after the human sends it.
+8. **wait for the signature** — `bin/watch_queue.ts --queue <id>
+   --until sent` waits for the human to sign, instead of you asking
+   them whether they have. see WATCHING THE LIVE FEED.
+9. **report the send and check the chain** — the hash comes from the
+   engine with `bin/queue_sent.ts --from-server`, and the outcome comes
+   from the chain with `bin/tx_status.ts`. the human never hands you a
+   hash. see AFTER THE HUMAN SENDS.
+10. **sync the local copy** — `bin/sync_queue.ts` refreshes the local
+    record with the server's current status.
 
 steps 2 through 5 are not paperwork. a wrong method or a wrong receiver
 often fails cleanly, but a wrong amount or a missing storage deposit
@@ -182,6 +189,7 @@ the `kind` column says where the answer comes from:
 | `get_queue.ts` | engine | read one queue from the server or the local store |
 | `sync_queue.ts` | engine | refresh local records with the server's current state |
 | `queue_sent.ts` | engine | report hashes and outcomes after the human sends |
+| `watch_queue.ts` | engine | watch the live feed, and refresh the local copy as it changes |
 | `tx_status.ts` | chain VIEW | read a transaction's receipt from the FastNear transactions API |
 | `contacts.ts` | local | manage the local contact list |
 | `check_contract.ts` | chain VIEW | verify an account and probe its methods on chain |
@@ -491,13 +499,49 @@ the `nextCursor` is opaque. hand it back exactly as the server gave it.
 
 #### AFTER THE HUMAN SENDS
 
-when the user reports a transaction hash, record it and check the
-outcome on chain with the FastNear transaction API. then sync the local
-record.
+**the human does not have to hand you the hash. the engine already has
+it.**
+
+when the human signs, their wallet reports the send to the engine, and
+the engine writes the hash on the account row. so the hash is already
+there, and you read it back out of the queue you queued:
 
 ```sh
-bun bin/queue_sent.ts tx --queue <queue_id> --hashes hashes.json
+# the hash, from the engine
+bun bin/get_queue.ts tx --id <queue_id>
+```
+
+the answer carries `accounts[].txHash` and `accounts[].status` on every
+account of the batch. `pending` means nobody has sent it. `sent` means
+it went out and nobody knows how it went yet. `succeeded` and `failed`
+are the outcomes.
+
+so the send is reported back from the engine's own record:
+
+```sh
+bun bin/queue_sent.ts tx --queue <queue_id> --from-server
+bun bin/queue_sent.ts swap --swap <swap_id>
+```
+
+`--from-server` reads the hashes off the queue's account rows. a swap
+without `--tx-hash` does the same thing. **there is no step where a
+human pastes a hash into a file.** a hash the engine does not have yet
+means the batch has not been sent, or the send was not reported to the
+engine — the bin says so rather than guessing.
+
+`--hashes <file>` still exists for a case the engine cannot cover: a
+hash you read off the chain yourself, for a send the engine never
+heard about. use one of `--hashes` or `--from-server`, never both.
+
+then read the receipt on chain, because a recorded send is not proof:
+
+```sh
 bun bin/tx_status.ts --tx-hash <hash> --signer alice.near
+```
+
+and refresh the local copy:
+
+```sh
 bun bin/sync_queue.ts one tx <queue_id>
 ```
 
@@ -529,7 +573,12 @@ leg and fail in its second. the whole api answer is under
 a hash the api does not know is an error, not a silent success: the
 bin prints `{"ok": false, "error": "..."}` on stderr and exits 1.
 
-`hashes.json` is an array:
+**the engine's status and the chain's status are two different
+things.** the engine says `succeeded` when it was told the receipt
+worked. `tx_status.ts` reads the receipt itself. when they disagree,
+the chain is right — the engine is a record of what it was told.
+
+`hashes.json` is an array, for the `--hashes` case:
 
 ```json
 [
@@ -542,14 +591,118 @@ knows how it went yet. when present it must be `succeeded` or `failed`
 — `sent` is not a value a client may send, and the server answers 400
 `bad_status` for it.
 
-for a swap:
+for a swap, with the hash from the engine and the outcome from the
+chain:
 
 ```sh
-bun bin/queue_sent.ts swap --swap <swap_id> --tx-hash <hash> --status succeeded --amount-out <unit>
+bun bin/queue_sent.ts swap --swap <swap_id> --status succeeded --amount-out <unit>
 ```
 
-a send report is not proof. read the receipt on chain before calling a
-transaction successful.
+---
+
+#### WATCHING THE LIVE FEED
+
+the engine's feed is a websocket. the server pushes every new queued
+batch and every new queued swap to every connected client, and
+`watch_queue.ts` listens to it.
+
+```sh
+# wait for one queue to be sent
+bun bin/watch_queue.ts --queue <queue_id> --for 120 --until sent
+
+# watch what this account's work looks like
+bun bin/watch_queue.ts --account-id alice.near --for 60
+
+# watch the engine's activity generally — no filter matches everything
+bun bin/watch_queue.ts --for 30
+```
+
+the watch is **bounded**, because every other bin runs once and exits
+and an agent cannot wait forever for a human. `--for <seconds>` sets
+the deadline, and `--until` ends it early when the work reaches that
+state: `any` (the default — the agent only wants to know something
+happened), `sent`, `succeeded`, or `failed`.
+
+the filters are the list route's filters, with the same names and the
+same meaning: `--account-id`, `--contract-id`, `--method`,
+`--token-in`, `--token-out`, and `--hide-sent`. the socket itself is
+filter-agnostic — the server carries everything and the client decides
+what matches — so one filter vocabulary covers both reading and
+watching.
+
+**the socket is the trigger; the server is the truth.** the socket
+says THAT something changed. the engine's routes say WHAT it is — the
+status, the hash, the whole item. so the watch refreshes the local
+record on every event, and the local copy is current when the bin
+exits.
+
+it prints one json object per line as the events arrive, then a summary
+object:
+
+```json
+{"ok":true,"event":"queue","id":"<id>","statuses":["pending"],"new":true,"localChanged":true}
+```
+
+then, at the end:
+
+```json
+{
+  "ok": true,
+  "watched": 120,
+  "until": "sent",
+  "connected": true,
+  "reached": true,
+  "events": [ ... ]
+}
+```
+
+**the log on stderr says what the json cannot.** stdout carries the
+events; stderr carries the state of the watch:
+
+| the log says | what it means |
+| --- | --- |
+| `watching <url> for <n>s, until <until>` | the watch started, and what it wants |
+| `filter: ...` | the filter in effect. `filter: none` means every new post matches |
+| `own account: <id>` | the account `hide_sent` is judged against |
+| `connected to <url> (attempt 1, waited 0ms)` | **the socket is up.** this is the line that says the watch is actually watching |
+| `new queue <id> [pending]` | a post arrived and matched |
+| `skipped queue <id> — contract_id: ... is not ...` | a post arrived and the filter turned it away, and this says which filter did it |
+| `socket: the socket closed (1006)` | the connection dropped. the middleman reconnects on its own |
+| `reached <until> — the watch ends` | the condition was met |
+| `the watch ended after <n>s and the socket was NOT connected` | **the watch was blind.** nothing could have arrived |
+
+`connected` in the summary is the same thing in json form. it is `false`
+when the socket never came up, and that is the difference between a
+quiet engine and a broken watch.
+
+**a socket connects before it subscribes.** a subscriber only sees
+what is published AFTER it subscribes, so a queue that was queued in
+the moment before the watch opened is not in the watch. give the socket
+a moment to open before you expect the event — the `connected` line is
+where you see that it has — or read the queue's own record, which has
+the state either way.
+
+**a watch is for waiting, not for polling.** `watch_queue.ts` and
+`sync_queue.ts` overlap on purpose: the watch tells you WHEN to
+refresh, and it does the refresh. use `sync_queue.ts` when you want to
+check an old queue without waiting for anything.
+
+---
+
+#### THE WHOLE AFTER-THE-SEND FLOW
+
+1. the human signs in the web app. their wallet tells the engine, and
+   the engine writes the hash on the account row.
+2. `watch_queue.ts --queue <id> --until sent` — the agent waits
+   instead of asking.
+3. `queue_sent.ts tx --queue <id> --from-server` — the hash comes from
+   the engine. the human never supplies one.
+4. `tx_status.ts --tx-hash <hash>` — the receipt on chain, which is
+   the real outcome.
+5. `sync_queue.ts one tx <id>` — the local copy matches the server.
+
+steps 3 and 4 answer two different questions. step 3 asks the engine
+what it recorded. step 4 asks the chain what happened.
 
 ---
 

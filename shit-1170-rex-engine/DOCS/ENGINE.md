@@ -7,6 +7,82 @@ engine stores and what the website shows.
 
 ---
 
+#### WHERE THE HASH LIVES
+
+the hash of a send is on the **ACCOUNT row**, not on the queue and not
+on the transaction:
+
+```text
+a QUEUE            queueId / what / when / why / whenAt / createdAt / updatedAt
+  └── TRANSACTION  txId / position / contractId / method / args / gas / deposit
+        └── ACCOUNT  accountId / status / txHash
+```
+
+when the human signs, their wallet reports the send to the engine, and
+the engine writes the hash there. so the agent reads the hash back out
+of the queue it queued — `GET /api/shit-1170/tx-queue/{queue_id}`
+answers with `accounts[].txHash` and `accounts[].status` on every
+account of the batch.
+
+this is why the human never has to hand the agent a hash. the engine
+already knows it.
+
+**a batch can hold several transactions, and each can have its own
+hash.** the `txId` on the hash request says which transaction of the
+batch the hash belongs to, and the server refuses a `txId` that
+belongs to another queue.
+
+---
+
+#### THE LIVE FEED
+
+`GET /api/shit-1170/feed/ws` is a websocket upgrade. the server pushes
+one json text message per event:
+
+```json
+{ "type": "queue", "queue": { ...TX_QUEUE_ITEM... } }
+{ "type": "swap",  "swap":  { ...SWAP_QUEUE_ITEM... } }
+```
+
+the payload is the EXACT item the list route answers with, so a live
+event drops straight into the list the api fills.
+
+it is pushed on six routes:
+
+| what happened | route |
+| --- | --- |
+| a batch was queued | `POST /api/shit-1170/tx-queue` |
+| a swap was queued | `POST /api/shit-1170/swap-queue` |
+| an account joined a batch | `POST /api/shit-1170/tx-queue/{queue_id}/accounts` |
+| an account joined a swap | `POST /api/shit-1170/swap-queue/{swap_id}/accounts` |
+| a batch was sent | `POST /api/shit-1170/tx-queue/{queue_id}/sent` |
+| a swap was sent | `POST /api/shit-1170/swap-queue/{swap_id}/sent` |
+
+the sent events carry the updated `accounts[].status` and
+`accounts[].txHash`, so a watcher learns the hash from the same push
+that told it the status changed.
+
+the socket is OPEN — no API key — and it is FILTER-AGNOSTIC: the
+server carries everything and the client decides what matches.
+
+> #### THE SOCKET IS THE TRIGGER, NOT THE TRUTH
+>
+> the socket says THAT something changed. the engine's routes say WHAT
+> it is. a watcher reads the item from the server, so the hash comes
+> from the server's account rows and not from the socket's copy of
+> them.
+
+> #### A SUBSCRIBER SEES ONLY WHAT COMES AFTER IT SUBSCRIBES
+>
+> a batch queued in the moment before the socket opened is not on the
+> socket. the queue's own record still has it.
+
+the typed client is `api_shit_1170_feed_ws(base_url, on_event,
+on_error)` in the middleman package. it reconnects on its own with a
+backoff, and the handle's `close()` stops the reconnects.
+
+---
+
 #### TWO KINDS OF QUEUE
 
 the engine has two different queues. they are not two views of one

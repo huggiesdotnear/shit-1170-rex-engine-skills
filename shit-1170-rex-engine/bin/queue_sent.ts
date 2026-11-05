@@ -12,7 +12,11 @@ import {
   shit_1170_quiet_fun,
 } from "../src/json_io";
 import { shit_1170_account_resolve_fun } from "../src/keyring";
-import { shit_1170_base_url_fun } from "../src/engine";
+import {
+  shit_1170_base_url_fun,
+  shit_1170_swap_hash_fun,
+  shit_1170_tx_hashes_fun,
+} from "../src/engine";
 import {
   shit_1170_queue_record_get_fun,
   shit_1170_queue_record_put_fun,
@@ -83,9 +87,11 @@ async function main_fun(): Promise<void> {
     shit_1170_print_json_fun({
       ok: true,
       usage: [
-        "queue_sent tx --queue <id> --hashes <tx-hashes.json> [--account signer]",
-        "queue_sent swap --swap <id> --tx-hash <hash> [--status succeeded|failed] [--amount-out <unit>]",
+        "queue_sent tx --queue <id> (--from-server | --hashes <tx-hashes.json>) [--account signer]",
+        "queue_sent swap --swap <id> [--tx-hash <hash>] [--status succeeded|failed] [--amount-out <unit>]",
         "omit --status to record the transaction as sent",
+        "--from-server reads the hashes off the engine: the human never has to paste one",
+        "queue_sent swap without --tx-hash also reads the hash off the engine",
       ],
     });
     return;
@@ -100,10 +106,42 @@ async function main_fun(): Promise<void> {
 
   if (command === "tx") {
     const queueId = shit_1170_require_string_fun(args, "queue");
-    const file = shit_1170_require_string_fun(args, "hashes");
-    const hashes = validate_hashes_fun(
-      JSON.parse(await readFile(file, "utf8")),
-    );
+    const hashesFile = shit_1170_flag_string_fun(args, "hashes");
+    const fromServer = shit_1170_flag_bool_fun(args, "from-server");
+
+    if (hashesFile && fromServer) {
+      throw new Error(
+        "use either --hashes <file> or --from-server, not both: the file gives the hashes by hand and --from-server reads them off the engine",
+      );
+    }
+
+    let hashes: SHIT_1170_TX_QUEUE_HASH_REQUEST[];
+    let from: "file" | "server";
+
+    if (fromServer) {
+      // --- WHY THE HASHES COME FROM THE ENGINE: the engine records the
+      // hash on the account row when the human's wallet reports the
+      // send. so the hash is already there, and the human never has to
+      // paste one into a file.
+      const serverHashes = await shit_1170_tx_hashes_fun(queueId, {
+        baseUrl,
+      });
+      if (serverHashes.length === 0) {
+        throw new Error(
+          `the engine has no hash for ${queueId} yet: the batch has not been sent, or the send was not reported to the engine. wait for it, or use --hashes <file>`,
+        );
+      }
+      hashes = serverHashes.map((one) => ({
+        txId: one.txId,
+        txHash: one.txHash,
+      }));
+      from = "server";
+    } else {
+      const file = shit_1170_require_string_fun(args, "hashes");
+      hashes = validate_hashes_fun(JSON.parse(await readFile(file, "utf8")));
+      from = "file";
+    }
+
     const result = await shit_1170_quiet_fun(() =>
       api_shit_1170_tx_queue_sent_post(
         baseUrl,
@@ -119,16 +157,36 @@ async function main_fun(): Promise<void> {
       request: existing?.request ?? { txHashes: hashes },
       response: result as unknown as Record<string, unknown>,
     });
-    shit_1170_print_json_fun({ ok: true, queue: result });
+    shit_1170_print_json_fun({
+      ok: true,
+      hashesFrom: from,
+      queue: result,
+    });
     return;
   }
 
   if (command === "swap") {
     const swapId = shit_1170_require_string_fun(args, "swap");
-    const txHash = shit_1170_require_string_fun(args, "tx-hash");
     const statusRaw = shit_1170_flag_string_fun(args, "status");
     const status = statusRaw === undefined ? undefined : parse_status_fun(statusRaw);
     const amountOut = shit_1170_flag_string_fun(args, "amount-out");
+
+    let txHash = shit_1170_flag_string_fun(args, "tx-hash");
+    let from: "flag" | "server" = "flag";
+
+    if (!txHash) {
+      // --- WHY THE HASH COMES FROM THE ENGINE: the engine records the
+      // hash on the account row when the swap was reported as sent. so
+      // the hash is already there, and the human never has to paste one.
+      txHash = (await shit_1170_swap_hash_fun(swapId, { baseUrl })) ?? undefined;
+      from = "server";
+      if (!txHash) {
+        throw new Error(
+          `the engine has no hash for ${swapId} yet: the swap has not been sent, or the send was not reported to the engine. pass --tx-hash <hash> if you have it`,
+        );
+      }
+    }
+
     const result = await shit_1170_quiet_fun(() =>
       api_shit_1170_swap_queue_sent_post(
         baseUrl,
@@ -148,7 +206,11 @@ async function main_fun(): Promise<void> {
       request: existing?.request ?? { txHash, status, amountOut },
       response: result as unknown as Record<string, unknown>,
     });
-    shit_1170_print_json_fun({ ok: true, swap: result });
+    shit_1170_print_json_fun({
+      ok: true,
+      hashFrom: from,
+      swap: result,
+    });
     return;
   }
 

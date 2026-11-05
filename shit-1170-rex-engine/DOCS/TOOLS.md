@@ -39,6 +39,7 @@ the engine's routes:
 | `GET /api/shit-1170/tx-queue/facets` | contracts and accounts with queued work |
 | `GET /api/shit-1170/tx-queue/stats/contracts` | queued call counts per contract |
 | `GET /api/shit-1170/tx-queue/stats/methods` | queued call counts per method |
+| `GET /api/shit-1170/feed/ws` | the LIVE feed, a websocket upgrade |
 | `GET /api/shit-1170/swap-queue` | the filterable list of queued swaps |
 | `POST /api/shit-1170/swap-queue` | queue a swap |
 | `GET /api/shit-1170/swap-queue/{swap_id}` | one queued swap |
@@ -49,6 +50,53 @@ the engine's routes:
 
 the API key travels in the `x-api-key` header. `x-session-token` is the
 legacy name and is still accepted.
+
+---
+
+#### THE LIVE FEED
+
+`GET /api/shit-1170/feed/ws` is a WEBSOCKET UPGRADE. the server pushes
+one json text message per event:
+
+```json
+{ "type": "queue", "queue": { ...TX_QUEUE_ITEM... } }
+{ "type": "swap",  "swap":  { ...SWAP_QUEUE_ITEM... } }
+```
+
+the payload is the EXACT item shape the list route answers with, so a
+live event can be dropped into the same list the api fills.
+
+the socket is pushed on six routes: a batch queued, a swap queued, an
+account joining a batch, an account joining a swap, a batch sent, and a
+swap sent. the sent events carry the updated `accounts[].status` and
+`accounts[].txHash`.
+
+the socket is OPEN — no API key, no engine account — and it is
+FILTER-AGNOSTIC: it carries every new post, and the CLIENT decides what
+matches the reader's filter.
+
+> #### THE SOCKET IS THE TRIGGER, NOT THE TRUTH
+>
+> the socket says THAT something changed. the engine's routes say WHAT
+> it is. so a watcher reads the item from the server, and the hash
+> comes from the server's account rows — never from the socket's copy
+> of them.
+
+> #### A SUBSCRIBER SEES ONLY WHAT COMES AFTER IT SUBSCRIBES
+>
+> a batch queued in the moment before the socket opened is not on the
+> socket. read the queue's own record when that matters.
+
+the typed client is `api_shit_1170_feed_ws(base_url, on_event,
+on_error, on_connect)` in the middleman. it reconnects on its own with a
+backoff that starts at one second and is capped at fifteen, and the
+handle's `close()` stops the reconnects.
+
+`on_connect` is fired on every connect — the first one and every
+reconnect — and carries the socket url, the attempt number, and the
+wait before it. **a caller that cannot see the connection cannot tell a
+quiet feed from a dead one**, so the callback is how a caller says
+"connected" without guessing.
 
 ---
 
@@ -64,7 +112,9 @@ it and one place to change it.
 - `@near-kit-tool-box/fun` — typed, Zod-validated NEAR contract helpers
 - `@near-kit-tool-box/env` — the server-side NEAR KIT client setup
 
-the tool box packages are v0.3.0.
+the tool box packages are v0.3.0. the middleman is v0.0.4 — the live
+feed's typed client, `api_shit_1170_feed_ws`, arrived in v0.0.3, and
+its `on_connect` callback in v0.0.4.
 
 `@near-kit-tool-box/fun` is the read side: one helper per contract
 method, each one a VIEW call. `generic_contract_view_fun_json` is the

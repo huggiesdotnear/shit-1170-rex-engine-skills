@@ -37,6 +37,7 @@ shapes the server accepts.
 | `GET /api/shit-1170/tx-queue/facets` | contracts and accounts with queued work |
 | `GET /api/shit-1170/tx-queue/stats/contracts` | queued call counts per contract |
 | `GET /api/shit-1170/tx-queue/stats/methods` | queued call counts per method |
+| `GET /api/shit-1170/feed/ws` | the LIVE feed, a websocket upgrade |
 | `GET /api/shit-1170/swap-queue` | the filterable list of queued swaps |
 | `POST /api/shit-1170/swap-queue` | queue a swap |
 | `GET /api/shit-1170/swap-queue/{swap_id}` | one queued swap |
@@ -62,7 +63,9 @@ it and one place to change it.
 - `@near-kit-tool-box/fun` — typed, Zod-validated NEAR contract helpers
 - `@near-kit-tool-box/env` — the server-side NEAR KIT client setup
 
-the near-kit tool box packages are v0.3.0.
+the near-kit tool box packages are v0.3.0. the middleman is v0.0.3 —
+the live feed's typed client, `api_shit_1170_feed_ws`, arrived in
+v0.0.3.
 
 `@near-kit-tool-box/fun` is the read side: one helper per contract
 method, each one a VIEW call. `generic_contract_view_fun_json` is the

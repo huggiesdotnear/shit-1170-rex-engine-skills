@@ -35,7 +35,7 @@
     "clean": "bun run tsc --build --clean && rm -rf dist .tsbuildinfo"
   },
   "dependencies": {
-    "@huggies/shit-1170-rex-engine-middleman": "^0.0.2",
+    "@huggies/shit-1170-rex-engine-middleman": "^0.0.4",
     "@near-kit-tool-box/env": "0.3.0",
     "@near-kit-tool-box/fun": "0.3.0",
     "@sleet-js/middleman-intear-api": "^0.1.0",

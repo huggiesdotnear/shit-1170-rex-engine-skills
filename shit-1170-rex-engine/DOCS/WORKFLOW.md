@@ -7,7 +7,7 @@ crosses contracts does not change shape halfway through.
 
 ---
 
-#### THE SIX MOVES
+#### THE SEVEN MOVES
 
 1. **find out** — read the contract, the chain, and the engine's state
    before deciding what to propose.
@@ -18,12 +18,18 @@ crosses contracts does not change shape halfway through.
 4. **queue it** — write the batch to the engine, for a human to sign.
 5. **keep a copy** — the local record under
    `${HOME}/.shit-1170-rex-engine/` is the backup and the history.
-6. **follow it** — sync the local record with the server after the human
-   sends, and read the receipt on chain.
+6. **wait for it** — watch the live feed until the human signs, rather
+   than asking them whether they have.
+7. **follow it** — report the send from the engine's record, read the
+   receipt on chain, and sync the local record.
 
 steps 2 and 3 are what make the skill worth using. the engine records
 whatever it is given, so an agent that queues without verifying can
 queue a call that moves the wrong amount to the wrong place.
+
+step 6 exists because the engine already knows when the human signs,
+and a hash they have to paste into a chat is a hash that can be
+mistyped. the wait replaces the question.
 
 ---
 
@@ -263,15 +269,31 @@ reads. the contract-specific skills cover the DEX and DAO reads.
 
 #### AFTER THE SEND
 
-1. the user reports the hash
-2. record it: `queue_sent.ts`
-3. read the receipt on chain with the FastNear API
+**the human never hands the agent a hash.** when the human signs, their
+wallet reports the send to the engine, and the engine writes the hash
+on the account row. so the agent reads the hash back out of the queue
+it queued.
+
+1. wait for it: `watch_queue.ts --queue <id> --until sent`, or read
+   the queue's own record with `get_queue.ts tx --id <id>`
+2. report the send from the engine's record: `queue_sent.ts tx --queue
+   <id> --from-server`
+3. read the receipt on chain with the FastNear API: `tx_status.ts
+   --tx-hash <hash>`
 4. sync the local record: `sync_queue.ts one tx <queue_id>`
 5. tell the human what actually happened
 
-a recorded send is not a successful transaction. the engine records
-`sent` when the outcome is unknown, and a receipt can fail after the
-first leg succeeded.
+**the engine's status and the chain's status are two different
+things.** step 2 asks the engine what it was told. step 3 asks the
+chain what happened. the engine records `sent` when the outcome is
+unknown, and a receipt can fail after the first leg succeeded — so when
+the two disagree, the chain is right.
+
+**the live feed is a trigger, not a source of truth.** the websocket
+says THAT something changed; the engine's routes say WHAT it is. the
+watch refreshes the local copy on every event, so the local record is
+current when the watch ends, and the hash still comes from the server
+rather than from the socket's copy of it.
 
 =====================
 <br/>
