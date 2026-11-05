@@ -165,6 +165,8 @@ would go stale the moment a new one is listed.
   `wrap.near` (wNEAR) trades 1:1 with NEAR and has the same 24. The
   answer says `decimals_source: "local"` for it, so the difference
   between "the registry says" and "the protocol says" stays visible.
+  Use `--ca near` for native NEAR and `--ca wrap.near` for wNEAR —
+  they are different tokens that happen to share their decimals.
 - A token that is not in the registry is an error, not a guess. A
   conversion with guessed decimals is worse than no conversion: the
   amount would look right and be wrong on the chain.

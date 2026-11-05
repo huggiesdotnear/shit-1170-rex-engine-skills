@@ -128,10 +128,17 @@ first:
 | receiver exists | `check_receiver.ts` | tokens go nowhere |
 | receiver has token storage | `storage_balance_of` | the transfer succeeds and the tokens vanish |
 | amount | `shit-1170-rex-unit-conversion` | a million times too much, or dust |
+| the account holds the input token | `balances.ts` | the swap is queued against money that is not there |
 | intent | the human | the right call doing the wrong thing |
 
 the last one is the one no tool can do. a technically correct call can
 still be the wrong thing to do.
+
+**the input token of a swap comes from the balances.** native NEAR is
+`near`; wNEAR is the contract `wrap.near`. the account holds one, the
+other, or both, and the swap sells whichever one it holds. when it
+holds no wNEAR, quote out of native NEAR — the router routes `near`
+directly, so there is no wrap step to pay for.
 
 ---
 
@@ -143,12 +150,35 @@ after queueing, the human gets:
 - each call: contract, method, the arguments that matter
 - gas and attached deposit per call
 - what must be true for it to succeed
-- the queue id and the local copy path
+- the queue id and the link to sign it
+- the local copy path
 - that it is waiting for their signature
 
 keep the explanation readable. the person reading it may be deciding
 whether to approve a transaction that moves their money, and raw JSON
 alone does not tell them whether it is reasonable.
+
+**the id and the link go together.** the id is what the human quotes
+back to you; the link is where they sign it. an id without a link
+makes the human go hunting through the feed for a proposal they cannot
+recognise by id alone.
+
+| what was queued | id field | the link |
+| --- | --- | --- |
+| a batch of calls | `queueId` | `/app/queue.html?queue=<queue_id>` |
+| a swap | `swapId` | `/app/swap.html?in=<token_in>&out=<token_out>&amount_in=<unit_amount>&swap=<swap_id>` |
+
+the ids are absolute paths on the site, so the full link is
+`https://shit-1170.com` plus the path.
+
+a swap's link carries the trade as well as the id, so the human lands
+on the swap already filled in. the `swap=` part is what makes their
+execution count against the queued proposal — the swap page reports
+the result back to the queued swap named by it, and a link without it
+leaves the queue still waiting.
+
+`in=near` is native NEAR. every other token is its bare contract id.
+`amount_in` is the raw unit amount, not the human one.
 
 ---
 

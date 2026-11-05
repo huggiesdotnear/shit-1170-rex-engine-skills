@@ -76,12 +76,15 @@ fail silently.
 3. **verify amounts** — use `shit-1170-rex-unit-conversion` to check
    human amounts against the token's real decimals.
 4. **check the account and receiver** — `bin/check_contract.ts` and
-   `bin/check_receiver.ts` verify that an account exists on chain.
+   `bin/check_receiver.ts` verify that an account exists on chain. for
+   a swap, `bin/balances.ts` says what the account actually holds, so
+   the input token is one they have. see NATIVE NEAR OR wNEAR.
 5. **show the human a plain-language summary** — contract, method,
    arguments, gas, deposit, and what it will do.
 6. **queue the batch** — `bin/queue_tx.ts` or `bin/queue_swap.ts`.
-7. **report the queue id and the local copy path** — the local copy is
-   the user's backup and their record of what worked.
+7. **report the queue id, the link, and the local copy path** — the id
+   and the link are how the human signs it; the local copy is the
+   user's backup and their record of what worked.
 8. **sync later** — `bin/sync_queue.ts` refreshes the local record with
    the server's current status after the human sends it.
 
@@ -331,6 +334,123 @@ same as on `queue_tx.ts`.
 
 ---
 
+#### NATIVE NEAR OR wNEAR — WHICH ONE IS THE INPUT
+
+**read the account's balances first, and let the balance pick the
+input token.** the human's money is either native NEAR or wNEAR, and
+only one of them is what they actually hold. a swap whose input token
+they do not have is a swap that cannot execute.
+
+```sh
+bun bin/balances.ts --account alice.near --sources direct,native
+```
+
+`balances.ts` answers with the account's native NEAR and its direct
+token balances, wNEAR among them. two cases:
+
+| the account holds | the swap's `tokenIn` is |
+| --- | --- |
+| native NEAR and no wNEAR | `near` |
+| wNEAR | `wrap.near` |
+| both | ask, or take the side the human named |
+| neither | the swap cannot be funded — say so before queueing |
+
+**`near` is native NEAR, not `wrap.near`.** the chain's own token has
+the id `near` and 24 decimals. wNEAR is the NEP-141 contract
+`wrap.near`, and it has 24 decimals too, so the decimals do not tell
+you which one you are looking at — the id does.
+
+the router takes both. it knows `near` as the chain's own NEAR and
+`wrap.near` as the wrapped contract, and it routes between them. so
+quoting a swap out of native NEAR does not need a wrap step first.
+
+**when the human holds no wNEAR, quote out of native NEAR.** do not
+add a wrap-then-swap step to make the trade work. the router already
+handles native NEAR as the input side, and a wrapped hop costs gas,
+costs a second route, and needs storage on `wrap.near` before the
+tokens can land. so:
+
+```sh
+# the account holds native NEAR and no wNEAR
+bun bin/queue_swap.ts \
+  --token-in near \
+  --amount-in 1000000000000000000000000 \
+  --token-out usdt.tether-token.near \
+  --what "Buy USDC with 1 NEAR" \
+  --accounts alice.near
+```
+
+**never assume wNEAR because a token is called "NEAR".** the token
+named `wrap.near` is wNEAR. the chain's own coin is `near`. a swap
+that sells `wrap.near` out of an account with no wNEAR balance is
+queued against money that is not there.
+
+if the human asked to spend native NEAR and the account also holds
+wNEAR, queue the native side. it is the coin they named, and it is
+the side that needs no wrap step.
+
+**the amount for `near` is in yoctoNEAR — 24 decimals.** 1 NEAR is
+`1000000000000000000000000`. use the unit-conversion skill to check it
+the same way you check any other token's amount.
+
+---
+
+#### REPORTING THE QUEUE ID AND THE SIGNING LINK
+
+**every queued item gets an id and a link. always give both.**
+
+the id is what the human quotes back to you ("check queue
+`abc-123`"), and the link is what they click to sign it. an id
+without a link makes the human go hunting through the feed for a
+proposal they cannot recognise by id alone.
+
+| what was queued | id field | the link to give them |
+| --- | --- | --- |
+| a batch of calls (`queue_tx.ts`) | `queueId` | <https://shit-1170.com/app/queue.html?queue=<queue_id>> |
+| a swap (`queue_swap.ts`) | `swapId` | <https://shit-1170.com/app/swap.html?in=<token_in>&out=<token_out>&amount_in=<unit_amount>&swap=<swap_id>> |
+
+a swap's link carries the whole trade, so the human lands on the swap
+already set up and their execution is credited back to the queued
+proposal. the four parameters are explained below.
+
+the bins print the id themselves — `queueId` for a batch, `swapId` for
+a swap — so read it from their stdout. do not make it up, and do not
+paraphrase it.
+
+say it like this:
+
+> queued as `abc-123` — sign it at
+> <https://shit-1170.com/app/queue.html?queue=abc-123>
+
+for a swap:
+
+> queued as swap `abc-123` — sign it at
+> <https://shit-1170.com/app/swap.html?in=wrap.near&out=usdt.tether-token.near&amount_in=1500000000000000000000000&swap=abc-123>
+
+### the swap link's four parameters
+
+| parameter | what it is |
+| --- | --- |
+| `in` | the token sold — `near` for native NEAR, the bare contract id for every other token |
+| `out` | the token bought |
+| `amount_in` | the raw unit amount sold |
+| `swap` | the queued swap's id |
+
+**`swap=` is the one that matters.** the swap page's SWAP NOW button
+records its result against the queued swap named by `swap=`. without
+that parameter the human's execution is not credited to the proposal
+you queued, and the queue keeps saying it is waiting. always include
+it when the swap came from `queue_swap.ts`.
+
+the other three pre-fill the form, so the human does not retype the
+trade. `amount_in` is the raw unit amount, not the human one — 1.5
+USDC is `1500000`, and 1.5 NEAR is `1500000000000000000000000`.
+
+the queue id is not a receipt. it means "the engine is holding this for
+you to sign", not "this happened".
+
+---
+
 #### READING QUEUES
 
 the server's queue lists are open — no API key is needed to read them.
@@ -429,6 +549,9 @@ bun bin/token_info.ts --ids wrap.near,usdt.tether-token.near
 deposits (`--sources rhea`). it does NOT read the Rhea DCL or INTEAR
 internal balances — those need the contract-specific skills.
 
+it is the read that picks a swap's input token. `--sources direct,native`
+tells you whether the account holds native NEAR, wNEAR, or both.
+
 `holders.ts` is the indexed holder list, paged with the cursor the
 server gives.
 
@@ -445,8 +568,13 @@ after queueing, tell the human, in plain language:
 - every call: contract, method, and the arguments that matter
 - the gas and attached deposit for each call
 - what the account must approve or own for it to succeed
-- the queue id and the local copy path
+- the queue id and the link to sign it
+- the local copy path
 - that it is waiting for their signature, and that they can send it later
+
+the queue id and the link go together. the id is what the human quotes
+back to you; the link is where they sign it. see REPORTING THE QUEUE
+ID AND THE SIGNING LINK above.
 
 do not describe a queued batch as sent, submitted, or executed.
 

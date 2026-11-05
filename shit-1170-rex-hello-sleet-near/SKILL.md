@@ -149,7 +149,14 @@ ambiguity about what they mean.
 2. explain the change in one sentence
 3. prepare the queue payload with `bin/greeting.ts set`
 4. queue it with the general skill's `queue_tx.ts`
-5. report the queue id and that it waits for a signature
+5. report the queue id, the link to sign it, and that it waits for a
+   signature
+
+the queue id and the link go together. the id is what the user quotes
+back to you; the link is where they sign it:
+
+> queued as `abc-123` — sign it at
+> <https://shit-1170.com/app/queue.html?queue=abc-123>
 
 ---
 

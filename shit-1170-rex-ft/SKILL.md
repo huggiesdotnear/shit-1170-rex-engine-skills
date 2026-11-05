@@ -296,7 +296,33 @@ confirm the contract id the same way as any other address.
 7. **queue it** — pass the payload to the general skill's
    `queue_tx.ts`.
 8. **explain** — token, amount in human and raw units, receiver, gas,
-   deposit, and the fact that it waits for a signature.
+   deposit, the queue id, the link to sign it, and the fact that it
+   waits for a signature.
+
+### native NEAR is not a token
+
+**NEAR the coin is not wNEAR the token.** the chain's own coin has the
+id `near` and is NOT a NEP-141 contract — there is no `ft_transfer` for
+it, no `ft_metadata`, and no storage to register. wNEAR is the wrapped
+contract `wrap.near`, and it IS a NEP-141 token.
+
+so:
+
+- to TRANSFER wNEAR, use this skill. the token is `wrap.near`.
+- to SPEND native NEAR, use the general skill's `queue_swap.ts` with
+  `tokenIn: "near"`. the router routes native NEAR directly.
+- never send native NEAR with `ft_transfer` — there is no contract to
+  send it through.
+
+`bin/ft_metadata.ts --token wrap.near` gives wNEAR's decimals, which
+are 24, the same as native NEAR's. the decimals do not tell you which
+one you have; the id does.
+
+when the human wants to buy something with NEAR and the account holds
+no wNEAR, quote the swap out of native NEAR (`tokenIn: "near"`). do
+not add a wrap step to make it work — it costs gas, costs a second
+route, and needs storage on `wrap.near` before the tokens can land.
+see NATIVE NEAR OR wNEAR in the general skill.
 
 ### the storage trap
 

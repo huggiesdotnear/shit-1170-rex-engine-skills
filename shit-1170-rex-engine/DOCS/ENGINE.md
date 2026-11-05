@@ -72,6 +72,18 @@ quote is worked out when it is shown.
 
 `dexId` is optional. it records where a stored quote came from.
 
+**the token ids are the intear registry's ids.** every token is its
+bare contract id, except native NEAR, which is `near`. wNEAR is
+`wrap.near` — the wrapped NEP-141 contract, not the chain's own coin.
+the router accepts both `near` and `nep141:<contract>`, and the site
+prefixes bare ids with `nep141:` on the way to it, leaving `near`
+alone.
+
+so a swap out of native NEAR is `tokenIn: "near"` with a yoctoNEAR
+amount (24 decimals), and a swap out of wNEAR is `tokenIn:
+"wrap.near"`. both are valid queue requests; the account has to hold
+the one being sold.
+
 ---
 
 #### QUERY FILTERS
@@ -121,6 +133,34 @@ the cursor is opaque. hand it back exactly as the server gave it.
 | INTEAR DEX | pools, TVL, volume, APY | `/app/contract/intear-dex.html` |
 | Sputnik DAO | config, policy, roles, proposals, balances | `/app/contract/sputnik-dao.html?dao_id=<dao>` |
 | skill | API keys and install instructions | `/app/skill.html` |
+
+the queue page and the swap page are the SIGNING pages. the queue id
+and the swap id are what make them point at one proposal:
+
+- a queued batch → `https://shit-1170.com/app/queue.html?queue=<queue_id>`
+- a queued swap → `https://shit-1170.com/app/swap.html?swap=<swap_id>`
+
+the swap page takes the trade itself as parameters as well, which is
+what the full swap link looks like:
+
+```
+/app/swap.html?in=<token_in>&out=<token_out>&amount_in=<unit_amount>&swap=<swap_id>
+```
+
+| parameter | what it is |
+| --- | --- |
+| `in` | the token sold — `near` for native NEAR, the bare contract id for every other token |
+| `out` | the token bought |
+| `amount_in` | the raw unit amount sold |
+| `swap` | the queued swap's id |
+
+`in`, `out` and `amount_in` pre-fill the form. `swap` is the one that
+credits the execution: the swap page's SWAP NOW button records its
+result against the queued swap named by `swap=`, so a link without that
+parameter leaves the queue saying it is still waiting.
+
+the same parameters without `swap=` are a link to a trade that is NOT
+queued — useful for showing a human a trade before it exists.
 
 ---
 
