@@ -11,7 +11,7 @@ an agent uses this to:
 - read the same balances, holders, and token data the website shows
 - sync a local queue record with the server after a human sends it
 
-see [SKILL.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md) for the workflow and the bins.
+see [SKILL.md](./SKILL.md) for the workflow and the bins.
 
 ---
 

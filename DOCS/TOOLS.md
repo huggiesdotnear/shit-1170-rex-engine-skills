@@ -4,7 +4,7 @@ the sources and the clients the shit-1170 rex skills use.
 
 this file is scoped to the whole library. for the engine skill's own
 sources, see its
-[TOOLS.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/TOOLS.md).
+[TOOLS.md](../shit-1170-rex-engine/DOCS/TOOLS.md).
 
 ---
 

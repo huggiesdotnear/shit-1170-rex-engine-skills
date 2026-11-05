@@ -5,7 +5,7 @@ fungible token transfers for the shit-1170 rex engine.
 prepare an NEP-141 transfer, check the receiver, and queue it for a
 human to sign.
 
-see [SKILL.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-ft/SKILL.md)
+see [SKILL.md](./SKILL.md)
 
 ---
 
