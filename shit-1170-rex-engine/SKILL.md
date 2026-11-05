@@ -491,9 +491,9 @@ use the contract skills for the specific protocol:
 
 #### MORE
 
-- [DOCS/TOOLS.md](./DOCS/TOOLS.md) — where the facts come from
-- [DOCS/WORKFLOW.md](./DOCS/WORKFLOW.md) — the shared agent workflow
-- [DOCS/ENGINE.md](./DOCS/ENGINE.md) — the routes, shapes, and pages
+- [TOOLS.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/TOOLS.md) — where the facts come from
+- [WORKFLOW.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/WORKFLOW.md) — the shared agent workflow
+- [ENGINE.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/ENGINE.md) — the routes, shapes, and pages
 
 =====================
 <br/>

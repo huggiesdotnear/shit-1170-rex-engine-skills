@@ -9,7 +9,7 @@ from the intear api.
 use it to convert an amount, and to double check one that was already
 worked out — a wrong amount succeeds on chain and fails silently.
 
-see [SKILL.md](./SKILL.md)
+see [SKILL.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-unit-conversion/SKILL.md)
 
 ---
 

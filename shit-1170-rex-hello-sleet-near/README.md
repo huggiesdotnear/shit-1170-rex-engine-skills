@@ -4,7 +4,7 @@ the hello.sleet.near greeting contract, as a skill.
 
 read the current greeting, or prepare a call that sets it.
 
-see [SKILL.md](./SKILL.md)
+see [SKILL.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-hello-sleet-near/SKILL.md)
 
 ---
 
