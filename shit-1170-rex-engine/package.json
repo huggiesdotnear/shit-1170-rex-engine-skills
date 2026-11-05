@@ -31,8 +31,8 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "rm -f .tsbuildinfo && bun run tsc --build tsconfig.build.json --force",
-    "clean": "bun run tsc --build --clean && rm -rf dist .tsbuildinfo"
+    "build": "rm -f tsconfig.build.tsbuildinfo && bun run tsc --build tsconfig.build.json --force",
+    "clean": "bun run tsc --build --clean && rm -rf dist tsconfig.build.tsbuildinfo"
   },
   "dependencies": {
     "@huggies/shit-1170-rex-engine-middleman": "^0.0.4",
