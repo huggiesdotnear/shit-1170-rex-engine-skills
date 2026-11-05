@@ -249,7 +249,9 @@ can. It is the token itself that decides, not any registry.
 #### LIBRARY USE
 
 The same math is importable, for when a script needs the conversion
-inline rather than through the bin:
+inline rather than through the bin. The skill is not published to npm
+— it is installed from the repo — so the import is a relative path into
+the skill folder:
 
 ```ts
 import {
@@ -257,11 +259,15 @@ import {
   unit_to_human_fun,
   unit_to_raw_human_fun,
   unit_conversion_token_info_fun,
-} from "@huggies/shit-1170-rex-unit-conversion";
+} from "./src/index";
 
 const info = await unit_conversion_token_info_fun("wrap.near");
 const unit = human_to_unit_fun("1.5", info.decimals);
 ```
+
+The `package.json` in this folder names the package the skill *would*
+have if it were published. That name is internal — nothing in this
+library is on the npm registry.
 
 ---
 

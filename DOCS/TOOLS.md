@@ -86,10 +86,20 @@ sign anything.
 the rex engine does not proxy the third-party APIs. the browser and the
 bins call them directly.
 
-the skills in this library are published under the `@huggies` scope too:
-`@huggies/shit-1170-rex-engine-skill`, `@huggies/shit-1170-rex-ft-skill`,
-`@huggies/shit-1170-rex-hello-sleet-near-skill`, and
-`@huggies/shit-1170-rex-unit-conversion`.
+**the skills in this library are NOT published to npm.** they are
+consumed with the skills installer, straight from the repo:
+
+```sh
+bunx skills add huggiesdotnear/shit-1170-rex-engine-skills
+```
+
+the `package.json` in each skill folder names the package the folder
+*would* have if it were published — `@huggies/shit-1170-rex-engine-skill`
+and its three siblings. those names are internal. nothing is on the
+npm registry, and nothing needs to be: the installer takes the repo.
+
+the middleman is a different thing — it IS published, because code
+outside this repo imports it.
 
 ---
 

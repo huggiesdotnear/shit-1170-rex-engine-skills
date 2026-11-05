@@ -9,6 +9,14 @@ bunx skills add huggiesdotnear/shit-1170-rex-engine-skills
 bunx skills add huggiesdotnear/shit-1170-rex-engine-skills --list
 ```
 
+**these skills are not published to npm.** they are installed from this
+repo with the skills installer above. the `package.json` in each skill
+folder names the package it *would* have if it were published, and
+those names are internal.
+
+the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman`
+— because code outside this repo imports it.
+
 ## the skills
 
 - [shit-1170-rex-engine](./shit-1170-rex-engine/SKILL.md) — propose, verify, queue, and track rex engine transactions and swaps
