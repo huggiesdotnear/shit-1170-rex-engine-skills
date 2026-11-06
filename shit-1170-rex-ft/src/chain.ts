@@ -27,7 +27,11 @@
 // `rpc.testnet.fastnear.com` for testnet) and decodes the answer.
 
 import { Near } from "near-kit";
-import { ft_methods_const, generic_contract_view_fun_json } from "@near-kit-tool-box/fun";
+import {
+  ft_methods_const,
+  generic_contract_view_fun_json,
+  wrap_near_methods_const,
+} from "@near-kit-tool-box/fun";
 import type { STORAGE_BALANCE_OF_RESPONSE_TYPE } from "@near-kit-tool-box/fun";
 
 export type SHIT_1170_NETWORK = "mainnet" | "testnet";
@@ -225,4 +229,57 @@ export async function shit_1170_storage_balance_of_fun(
     total: result.total ?? null,
     available: result.available ?? null,
   };
+}
+
+// --- THE WRAP.NEAR READS ---
+//
+// the two facts a wrap needs before it can be queued: how much
+// native NEAR the account holds, and whether the account is
+// registered on wrap.near's storage.
+
+/**
+ * one account's wNEAR balance, in wNEAR's smallest unit.
+ */
+export async function shit_1170_ft_balance_of_fun(
+  network: SHIT_1170_NETWORK,
+  token_id: string,
+  account_id: string,
+): Promise<string | null> {
+  try {
+    const result = await shit_1170_view_fun<string | null>(
+      network,
+      token_id,
+      ft_methods_const.ft_balance_of,
+      { account_id },
+    );
+    return result ?? null;
+  } catch (error) {
+    if (shit_1170_no_value_error_fun(error)) return "0";
+    throw error;
+  }
+}
+
+/**
+ * wrap.near's own storage minimum, in yoctoNEAR.
+ *
+ * this is the live number from the contract, not the standard's
+ * floor. use it for the `storage_deposit` deposit rather than the
+ * constant, so a change on the contract is picked up.
+ */
+export async function shit_1170_storage_minimum_balance_fun(
+  network: SHIT_1170_NETWORK,
+  token_id: string,
+): Promise<string | null> {
+  try {
+    const result = await shit_1170_view_fun<string | null>(
+      network,
+      token_id,
+      wrap_near_methods_const.storage_minimum_balance,
+      {},
+    );
+    return result ?? null;
+  } catch (error) {
+    if (shit_1170_no_value_error_fun(error)) return null;
+    throw error;
+  }
 }

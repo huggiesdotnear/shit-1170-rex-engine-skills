@@ -27,6 +27,11 @@ import {
 
 export type { QUEUE_CALL };
 
+// the wrap.near contract: `near_deposit` and `near_withdraw`, the
+// queue payloads for them, and the batch that wraps with the storage
+// registration in front of it.
+export * from "./wrap_near";
+
 export interface SHIT_1170_FT_TRANSFER_REQUEST {
   tokenId: string;
   receiverId: string;

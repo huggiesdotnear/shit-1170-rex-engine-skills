@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-ft
-description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the shit-1170 rex engine — the standard method shapes, the gas and deposit for each call, a local contact list, receiver-existence checks, and NEP-145 token-storage checks. Use this skill whenever the user mentions an FT, fungible token, NEP-141, NEP-145, ft_transfer, ft_transfer_call, ft_balance_of, ft_metadata, ft_total_supply, storage_deposit, storage_balance_of, storage_balance_bounds, storage_withdraw, wNEAR, USDC, USDT, token decimals, the contacts list, or wants to send or transfer tokens to a NEAR account — including checking whether a receiver exists and can hold the token. Also use it whenever a transfer amount must be converted from decimals to the token's raw unit amount. Emit a queue payload for a human to sign; never send it yourself.
+description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the shit-1170 rex engine — the standard method shapes, the gas and deposit for each call, a local contact list, receiver-existence checks, and NEP-145 token-storage checks. Use this skill whenever the user mentions an FT, fungible token, NEP-141, NEP-145, ft_transfer, ft_transfer_call, ft_balance_of, ft_metadata, ft_total_supply, storage_deposit, storage_balance_of, storage_balance_bounds, storage_withdraw, wNEAR, USDC, USDT, token decimals, the contacts list, or wants to send or transfer tokens to a NEAR account — including checking whether a receiver exists and can hold the token. Also use it whenever a transfer amount must be converted from decimals to the token's raw unit amount. Use it for wrapping and unwrapping NEAR — wrap.near, wNEAR, near_deposit, near_withdraw, converting native NEAR to wNEAR or back. Emit a queue payload for a human to sign; never send it yourself.
 ---
 
 # shit-1170 rex FT
@@ -345,6 +345,117 @@ not add a wrap step to make it work — it costs gas, costs a second
 route, and needs storage on `wrap.near` before the tokens can land.
 see NATIVE NEAR OR wNEAR in the general skill.
 
+### wrapping and unwrapping
+
+`wrap.near` is the wNEAR contract, and it has two methods of its own
+for turning the coin into the token and back. they are not the
+standard's `ft_transfer`, and they are not a swap.
+
+| intent | method | args | attached deposit | gas |
+| --- | --- | --- | --- | --- |
+| NEAR → wNEAR | `near_deposit` | `{}` | **the amount to wrap** | 30 Tgas |
+| wNEAR → NEAR | `near_withdraw` | `{ "amount": "<unit>" }` | exactly 1 yoctoNEAR | 30 Tgas |
+
+**the deposit on `near_deposit` IS the amount.** there are no
+arguments — the attached deposit is how much NEAR goes in, and it
+becomes the wNEAR. it is not a fee and it is not refunded.
+
+**the deposit on `near_withdraw` is 1 yoctoNEAR.** that is a security
+deposit against a restricted function-call key, not a fee, and it is
+refunded. the amount to unwrap is the `amount` argument, in wNEAR's
+smallest unit.
+
+**a wrap is queued as a BATCH, not as a swap.** the engine's swap
+queue names a token sold and a token bought, and a router works the
+route out at execution time. `near_deposit` and `near_withdraw` are
+direct calls to `wrap.near`, so they go through the general skill's
+`queue_tx.ts` with a batch of calls.
+
+**a wrap carries its own storage registration.** `near_deposit` mints
+wNEAR to the caller, and the contract needs somewhere to put the
+balance. an account with no NEP-145 storage registered on `wrap.near`
+cannot hold the mint. so the registration goes in the SAME batch, in
+front of the deposit:
+
+```json
+[
+  {
+    "contractId": "wrap.near",
+    "method": "storage_deposit",
+    "args": {},
+    "gas": "30000000000000",
+    "deposit": "1250000000000000000000"
+  },
+  {
+    "contractId": "wrap.near",
+    "method": "near_deposit",
+    "args": {},
+    "gas": "30000000000000",
+    "deposit": "1500000000000000000000"
+  }
+]
+```
+
+the order matters and the batch runs as one transaction, so the
+receipt tree holds together — if the registration fails, the mint does
+not run either.
+
+**an unwrap needs no registration.** the account already holds wNEAR,
+so it already has the storage that holds it:
+
+```json
+{
+  "contractId": "wrap.near",
+  "method": "near_withdraw",
+  "args": { "amount": "1500000000000000000000000" },
+  "gas": "30000000000000",
+  "deposit": "1"
+}
+```
+
+**the gas is not documented by the contract.** 30 Tgas is the engine's
+working value, not the contract's promise. the one deposit the
+contract does fix is `near_withdraw`'s 1 yoctoNEAR.
+
+**never wrap to feed a swap.** the router takes native NEAR as the
+input side directly. a wrap hop costs gas, costs a second route, and
+needs storage on `wrap.near`. quote the swap out of native NEAR
+(`tokenIn: "near"`) and wrap only when the human actually wants
+wNEAR.
+
+#### THE BINS
+
+```sh
+# what does the account hold, and can it wrap?
+bun bin/wrap_check.ts --account sleet.near
+
+# the queue payload for a wrap
+bun bin/wrap.ts --direction wrap --amount 1500000000000000000000000
+
+# the queue payload for an unwrap
+bun bin/wrap.ts --direction unwrap --amount 1500000000000000000000000
+
+# the registration on its own
+bun bin/wrap.ts --direction storage
+```
+
+`wrap_check.ts` reads the account's native NEAR, its wNEAR balance,
+its storage registration on `wrap.near`, and the contract's live
+`storage_minimum_balance`. it answers with `canWrap` and `canUnwrap`,
+and the warnings say what is missing.
+
+`wrap.ts` prints the queue payload and sends nothing. `--amount` is
+in the SMALLEST UNIT — native NEAR and wNEAR are both 24 decimals, so
+use `shit-1170-rex-unit-conversion` to convert and to check.
+
+`--no-storage-deposit` drops the registration from the wrap. that is
+only right when `wrap_check.ts` says the account is ALREADY
+registered.
+
+**check before you queue.** a wrap that is queued without the
+registration fails at signing time, and an amount that is wrong by a
+factor of a million succeeds.
+
 ### the storage trap
 
 if the receiver has no storage on the token, registering it is part of
@@ -385,6 +496,8 @@ use the token's own `storage_balance_bounds` for the exact minimum —
 | `ft_check.ts` | receiver existence, contact membership, token storage, decimals |
 | `ft_balance.ts` | one account's balance of one token, with the decimals |
 | `ft_metadata.ts` | a token's metadata, total supply, and storage bounds |
+| `wrap.ts` | prepare a `near_deposit` or `near_withdraw` queue payload, with the storage registration in the wrap batch |
+| `wrap_check.ts` | an account's native NEAR, wNEAR balance, storage registration on `wrap.near`, and what it can wrap |
 | `contacts.ts` | manage the local contact list |
 
 all of them print JSON on stdout and JSON errors on stderr with a
@@ -438,6 +551,16 @@ bun bin/ft_balance.ts --token usdt.tether-token.near --account sleet.near
 bun bin/ft_metadata.ts --token usdt.tether-token.near
 ```
 
+check what an account can wrap, then prepare the wrap:
+
+```sh
+bun bin/wrap_check.ts --account sleet.near
+bun bin/wrap.ts --direction wrap --amount 1500000000000000000000000
+```
+
+the wrap payload is a batch of two calls — the registration, then the
+deposit — and it goes to the general skill's `queue_tx.ts`.
+
 ---
 
 #### WHEN NOT TO USE THIS SKILL
@@ -445,7 +568,8 @@ bun bin/ft_metadata.ts --token usdt.tether-token.near
 - a swap between tokens through the engine's own swap queue: use the
   general skill's `queue_swap.ts`. a swap made *through* a DEX
   contract is different — that is an `ft_transfer_call` into the DEX,
-  and it belongs here.
+  and it belongs here. a wrap is different again: it is a direct call
+  to `wrap.near`, so it is a batch of calls, and it belongs here.
 - an NFT: NEP-171 is a different standard with a different transfer
   shape.
 - a multi-token contract: NEP-245 has its own interface.
