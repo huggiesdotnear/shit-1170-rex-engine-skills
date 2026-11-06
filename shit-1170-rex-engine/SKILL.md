@@ -248,9 +248,10 @@ is a `400` (`args_base64_not_base64`); neither is an empty `args`, which
 is what a call with no arguments has always been.
 
 the browser decodes the base64 back into bytes and hands the **bytes**
-to the wallet, so the raw payload reaches the chain as it is. use
-`argsBase64` only when the contract's arguments really are bytes — see
-the `shit-1170-rex-fastfs` skill.
+to the wallet — but the wallet then carries them to its signer in its
+own way, and that way differs per wallet. see THE BYTES MUST REACH THE
+WALLET AS BYTES below. use `argsBase64` only when the contract's
+arguments really are bytes — see the `shit-1170-rex-fastfs` skill.
 
 #### THE BYTES MUST REACH THE WALLET AS BYTES
 
@@ -262,11 +263,31 @@ is not borsh, and the action is **dropped silently**: the receipt
 fails the way a FastFS receipt always fails, the file never appears
 at its URL, and nothing anywhere says why.
 
-so the browser must pass the bytes through **as bytes**. decode the
-base64 into a `Uint8Array` and hand that to the wallet, and never
-let the value pass through `JSON.stringify` on the way. if the
-browser's own code turns the bytes into a plain object, the payload
-is broken before the wallet sees it.
+so the bytes must cross every boundary as bytes. **how** depends on
+the wallet, and the wallets split in two.
+
+| the wallet | what it does with the arguments | what the app sends |
+| --- | --- | --- |
+| the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | take them as a `Uint8Array` and borsh-serialize the whole transaction in the browser | the bytes, in the connector action shape |
+| the **wallet-server** wallets — the Intear Wallet is one | hand the transaction to their own server as json and read the arguments out of that json | the **base64 string**, in the near-api-js action shape |
+
+the **wallet-server** wallets read their arguments from json, and their
+native action type holds them as `Vec<u8>` with
+`#[serde_as(as = "Base64")]` — so their native path wants a base64
+**string**. their fallback path takes a json value and writes it out
+with `serde_json::to_vec`, and that is the one that turns the bytes
+into the json text of a byte map.
+
+**so the app asks the connected wallet which one it is** — the
+connector hands back the wallet, and the wallet carries its manifest,
+and the manifest carries the wallet's id — and gives it the shape it
+reads.
+
+the jsonified blob also explains itself: **the keys come out in
+lexicographic order** (`0,1,10,11,…,2,20,…`), because `serde_json`'s
+map is a `BTreeMap`. javascript's `JSON.stringify` orders integer-like
+keys numerically, so a lexicographic order means a **Rust** side
+produced it.
 
 **how to tell, from the chain, which of the two happened:** decode
 the action's `args` from base64 and look at the first bytes.

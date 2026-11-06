@@ -86,15 +86,14 @@ base64-encoded in `argsBase64` — that is the JSON envelope, not the
 wire format. the engine decodes `argsBase64` back to raw bytes before
 it becomes the action's args, and that is what the indexer reads.
 
-### --- THE BROWSER MUST NOT STRINGIFY THE BYTES ---
+### --- THE BYTES MUST CROSS EVERY BOUNDARY AS BYTES ---
 
 **this is the one thing that breaks a FastFS upload, and it breaks it
 silently.**
 
-the bytes have to reach the wallet as bytes. if the browser's own
-code passes them through `JSON.stringify` — or converts the
-`Uint8Array` into a plain object on the way — the action's args
-become the **json text** of a byte map:
+the bytes have to reach the chain as bytes. if they pass through
+`JSON.stringify` — or are turned into a plain object on the way — the
+action's args become the **json text** of a byte map:
 
 ```
 {"0":0,"1":15,"10":47,"11":115,…}
@@ -104,6 +103,21 @@ that is not borsh. the indexer does `borsh::from_slice` on the raw
 args, gets nothing, and **drops the action**. there is no error: the
 receipt fails the way a FastFS receipt always fails, the file never
 appears at its URL, and the CDN caches the 404.
+
+**and the wallet decides how the bytes cross.** the wallets split in
+two, and they want opposite things:
+
+| the wallet | what it wants |
+| --- | --- |
+| the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | the bytes, as a `Uint8Array` |
+| the **wallet-server** wallets — the Intear Wallet is one | the **base64 string** |
+
+the wallet-server wallets read the transaction out of json on their
+own server, and their native action holds the arguments as `Vec<u8>`
+with `#[serde_as(as = "Base64")]` — so their native path wants a
+base64 **string**. their fallback path takes a json value and writes
+it out with `serde_json::to_vec`, and that is the one that turns the
+bytes into the json text of a byte map.
 
 **how to tell, from the chain, which of the two happened.** decode
 the action's `args` from base64 and look at the first bytes.
@@ -116,6 +130,12 @@ the action's `args` from base64 and look at the first bytes.
 the json one is longer than the borsh it replaced, because every byte
 became a key, a colon and a number. a 52-byte borsh payload arrives
 as 425 bytes of json.
+
+**and the json text says which wallet did it.** the keys come out in
+**lexicographic** order — `0,1,10,11,…,2,20,…` — because
+`serde_json`'s map is a `BTreeMap`. javascript's `JSON.stringify`
+orders integer-like keys *numerically*, so a lexicographic order means
+a **Rust** side produced it, and that points at the wallet-server kind.
 
 ### the borsh schema
 
