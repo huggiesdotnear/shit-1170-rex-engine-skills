@@ -7,73 +7,15 @@ description: Read the hello.sleet.near greeting contract on mainnet and testnet 
 
 the hello.sleet.near greeting contract.
 
-- live site: <https://shit-1170.com/>
-- code: <https://github.com/huggiesdotnear/shit-1170-rex-engine>
-
 use the general `shit-1170-rex-engine` skill for the queueing
-mechanics. this skill holds the contract's methods and arguments.
+mechanics and the architecture. this skill holds the contract's methods
+and arguments.
 
----
-
-#### THE ARCHITECTURE
-
-**the agent NEVER calls a contract.**
-
-every state-changing call goes through the rex engine as a QUEUED
-generic function call, and a HUMAN signs it in the web app with their
-wallet. so:
-
-- this skill only needs VIEW methods to read chain state.
-- for a write, this skill emits a QUEUE PAYLOAD —
-  `{ contractId, method, args, gas, deposit }` — the exact shape the
-  engine's tx-queue accepts. the engine queues it for a human to
-  sign. it is NOT a near-kit transaction and NOT a `near.call`.
-- never call `near.call`, `generic_contract_call_fun`, or
-  `generic_contract_call_wallet` from a skill bin. the `*_fun_json`
-  helpers that CALL (not view) are for reference only: use their
-  argument shape, gas, and deposit, but emit a queue payload instead
-  of sending.
-
-**queue the transaction; do not send it.** the engine queues a batch
-for a human to sign in one wallet popup. your job ends when the batch
-is queued and explained. never claim a transaction was sent.
-
-**the split is where the reads come from and where the writes go.**
-
-- **view calls** go to the near-kit tool box, directly — here,
-  `greeting_get_greeting_fun_json` reads the greeting.
-- **contract interaction** goes to the queue helpers. the agent does
-  not sign and does not send — a write becomes a queue payload the
-  engine holds for a human.
-
-the tool box supplies the **facts** of a contract — the argument
-shape, the gas, the deposit. the queue helpers carry the **action**.
-never use the tool box to interact with a contract: its `*_fun_json`
-helpers that CALL are reference material, and
-`generic_contract_call_wallet` needs a browser wallet this skill does
-not have.
-
----
-
-#### THE TOOLS
-
-the chain reads go through the near-kit tool box:
-
-- `@near-kit-tool-box/fun` — typed helpers with Zod-validated
-  answers. `greeting_get_greeting_fun_json` reads the greeting, and
-  `greeting_contractid(network)` resolves the contract id for a
-  network. `generic_contract_view_fun_json` is the escape hatch for
-  views that have no dedicated helper.
-- `@near-kit-tool-box/env` — the server-side client setup.
-- `near-kit` — the client itself. the skill builds
-  `new Near({ network })` from it, so the default is MAINNET. the env
-  package's own default is testnet, which is why the skills do not
-  use its client directly.
-
-`@near-kit-tool-box/web` is the BROWSER-wallet variant. it needs a
-browser wallet and `localStorage`. the frontend uses it. this skill
-does not — a skill bin runs in a terminal, has no wallet, and must
-never sign anything.
+**the rules that apply here too:** the agent never calls a contract. a
+read goes to the near-kit tool box (`@near-kit-tool-box/fun`); a write
+emits a QUEUE PAYLOAD for the engine to queue for a human to sign.
+never `near.call`, never `generic_contract_call_fun`, never
+`generic_contract_call_wallet`.
 
 ---
 
@@ -86,6 +28,10 @@ the network decides the id. the testnet contract is a different
 contract, not a copy of the mainnet one — a call to the wrong one
 fails with `MethodResolveError`.
 
+the tool box resolves it per network: `greeting_contractid("mainnet")`
+is `hello.sleet.near`, `greeting_contractid("testnet")` is
+`hello.sleet.testnet`.
+
 ---
 
 #### THE METHODS
@@ -95,7 +41,10 @@ fails with `MethodResolveError`.
 no arguments. gas: none — a view call is read-only. attached
 deposit: 0.
 
-answers with the current greeting, as a plain string.
+answers with the current greeting, as a plain string. the tool box
+helper is `greeting_get_greeting_fun_json`, and
+`generic_contract_view_fun_json` is the escape hatch for views that
+have no dedicated helper.
 
 ### set_greeting - CALL
 
@@ -117,7 +66,7 @@ contract, so a wrong argument shape often looks like it worked.
 
 ---
 
-#### WRITES ARE QUEUED, NEVER SENT
+#### THE WRITE PAYLOAD
 
 `set_greeting` produces a QUEUE PAYLOAD — data, not an action. the
 engine queues it and a human signs it.
@@ -132,28 +81,16 @@ engine queues it and a human signs it.
 }
 ```
 
-- `contractId` — the greeting contract's account id. the tool box
-  resolves it per network: `greeting_contractid("mainnet")` is
-  `hello.sleet.near`, `greeting_contractid("testnet")` is
-  `hello.sleet.testnet`.
-- `method` — the method name, exactly as the contract spells it.
-- `args` — the contract's own argument object. for `set_greeting` it
-  is `{ greeting }` and nothing else.
-- `gas` — the gas, as a raw digit string of gas units. `3000000000000`
-  is 3 Tgas.
-- `deposit` — the attached native NEAR, as a raw digit string of
-  yoctoNEAR. `0` here — the contract takes no deposit.
+`contractId` is the greeting contract's account id for the network.
+`method` is the method name, exactly as the contract spells it. `args`
+is the contract's own argument object — for `set_greeting` it is
+`{ greeting }` and nothing else. `gas` and `deposit` are raw digit
+strings — gas units and yoctoNEAR. `3000000000000` is 3 Tgas, and
+`0` here because the contract takes no deposit.
 
-the payload for each write method:
-
-| method | args | gas | deposit |
-| --- | --- | --- | --- |
-| `set_greeting` | `{ greeting }` | 3 Tgas | 0 |
-
-`gas` and `deposit` are raw digit strings here. the web app's
-`shared/gas_deposit.ts` also accepts near-kit's human forms —
-`"3 Tgas"`, `"1 yocto"` — and converts them, so a hand-written payload
-may use either. raw digits are preferred, because there is no
+the web app's `shared/gas_deposit.ts` also accepts near-kit's human
+forms (`"3 Tgas"`, `"1 yocto"`) and converts them, so a hand-written
+payload may use either. raw digits are preferred, because there is no
 ambiguity about what they mean.
 
 ---
@@ -166,12 +103,6 @@ ambiguity about what they mean.
 4. queue it with the general skill's `queue_tx.ts`
 5. report the queue id, the link to sign it, and that it waits for a
    signature
-
-the queue id and the link go together. the id is what the user quotes
-back to you; the link is where they sign it:
-
-> queued as `abc-123` — sign it at
-> <https://shit-1170.com/app/queue.html?queue=abc-123>
 
 ---
 
@@ -196,9 +127,7 @@ the `set` command does not queue anything by itself — it prints the
 queue payload to queue. that keeps the preparation and the queueing
 steps separate, and the human sees the same payload either way.
 
----
-
-#### EXAMPLE
+an example, then the queueing:
 
 ```sh
 bun bin/greeting.ts set --greeting "Hello from sleet"
@@ -217,8 +146,6 @@ bun bin/greeting.ts set --greeting "Hello from sleet"
   }
 }
 ```
-
-then queue it:
 
 ```sh
 bun ../../shit-1170-rex-engine/bin/queue_tx.ts \

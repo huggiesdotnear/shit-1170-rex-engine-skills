@@ -5,6 +5,42 @@ the rex engine's data model, routes, and pages.
 this is the reference the agent reads when it needs to know what the
 engine stores and what the website shows.
 
+the typed client is `@huggies/shit-1170-rex-engine-middleman`. it
+exposes one function per route and one type per request and response
+shape, and the bins call it — so the shapes they send are the shapes
+the server accepts.
+
+---
+
+#### THE ROUTES
+
+| route | what it does |
+| --- | --- |
+| `GET /api/shit-1170/ping` | liveness |
+| `POST /api/shit-1170/api-keys` | exchange signed messages for API keys |
+| `GET /api/shit-1170/api-key/me` | which account a key belongs to |
+| `POST /api/shit-1170/api-key/rotate` | issue a new key for an account |
+| `GET /api/shit-1170/tx-queue` | the filterable list of queued batches |
+| `POST /api/shit-1170/tx-queue` | queue a batch of function calls |
+| `GET /api/shit-1170/tx-queue/{queue_id}` | one queued batch |
+| `POST /api/shit-1170/tx-queue/{queue_id}/accounts` | add your own account |
+| `DELETE /api/shit-1170/tx-queue/{queue_id}/accounts/{account_id}` | remove your own account |
+| `POST /api/shit-1170/tx-queue/{queue_id}/sent` | report sent hashes and outcomes |
+| `GET /api/shit-1170/tx-queue/facets` | contracts and accounts with queued work |
+| `GET /api/shit-1170/tx-queue/stats/contracts` | queued call counts per contract |
+| `GET /api/shit-1170/tx-queue/stats/methods` | queued call counts per method |
+| `GET /api/shit-1170/feed/ws` | the LIVE feed, a websocket upgrade |
+| `GET /api/shit-1170/swap-queue` | the filterable list of queued swaps |
+| `POST /api/shit-1170/swap-queue` | queue a swap |
+| `GET /api/shit-1170/swap-queue/{swap_id}` | one queued swap |
+| `POST /api/shit-1170/swap-queue/{swap_id}/accounts` | add your own account |
+| `DELETE /api/shit-1170/swap-queue/{swap_id}/accounts/{account_id}` | remove your own account |
+| `POST /api/shit-1170/swap-queue/{swap_id}/sent` | report the send |
+| `GET /api/trezu/user/treasuries` | the Sputnik DAOs an account belongs to |
+
+the API key travels in the `x-api-key` header. `x-session-token` is
+the legacy name and is still accepted.
+
 ---
 
 #### WHERE THE HASH LIVES
@@ -222,13 +258,6 @@ what the full swap link looks like:
 ```
 /app/swap.html?in=<token_in>&out=<token_out>&amount_in=<unit_amount>&swap=<swap_id>
 ```
-
-| parameter | what it is |
-| --- | --- |
-| `in` | the token sold — `near` for native NEAR, the bare contract id for every other token |
-| `out` | the token bought |
-| `amount_in` | the raw unit amount sold |
-| `swap` | the queued swap's id |
 
 `in`, `out` and `amount_in` pre-fill the form. `swap` is the one that
 credits the execution: the swap page's SWAP NOW button records its

@@ -5,87 +5,60 @@ description: "Propose, verify, queue, and track NEAR transactions and swaps with
 
 # shit-1170 rex engine
 
-the shit-1170 rex engine is a social feed and transaction queue for
-NEAR. agents prepare work; humans sign it in their wallet.
+the engine is a feed and a transaction queue for NEAR. agents prepare
+work; humans sign it in their wallet.
 
 - live site: <https://shit-1170.com/>
 - code: <https://github.com/huggiesdotnear/shit-1170-rex-engine>
-- skills: <https://github.com/huggiesdotnear/shit-1170-rex-engine-skills>
 - typed client: `@huggies/shit-1170-rex-engine-middleman`
+
+this skill owns the queueing mechanics. the token and contract skills
+own the facts about their contracts and link here for the rest.
 
 ---
 
-#### THE ARCHITECTURE
+#### THE ONE RULE
 
 **the agent NEVER calls a contract.**
 
-every state-changing call goes through the rex engine as a QUEUED
-generic function call, and a HUMAN signs it in the web app with their
-wallet. so:
+every state-changing call goes through the engine as a QUEUED generic
+function call, and a human signs it in the web app with their wallet.
+the agent prepares the transaction and queues it. it does not sign, send,
+or wait for a signature.
 
-- the skills only need VIEW methods for reading chain state.
-- for the write side, a skill produces a QUEUE PAYLOAD —
-  `{ contractId, method, args, gas, deposit }` — the exact shape the
-  engine's tx-queue accepts. the engine queues it for a human to
-  sign. it is NOT a near-kit transaction and NOT a `near.call`.
-- never call `near.call`, `generic_contract_call_fun`, or
-  `generic_contract_call_wallet` from a skill bin. the `*_fun_json`
-  helpers that CALL (not view) are for reference only: use their
-  argument shape, gas, and deposit, but emit a queue payload instead
-  of sending.
+so:
 
-**the split is where the reads come from and where the writes go.**
+- **reads** go to the near-kit tool box, directly. a view is a read: no
+  API key, no engine account, and a typed helper for most of them.
+- **writes** emit a QUEUE PAYLOAD — `{ contractId, method, args, gas,
+  deposit }` — the exact shape the engine's tx-queue accepts. it is NOT
+  a near-kit transaction and NOT a `near.call`.
 
-| side | what it uses | why |
-| --- | --- | --- |
-| **view calls** | the near-kit tool box, directly | a view is a read. the tool box has a typed helper for it, it needs no API key and no engine account, and it answers with a validated shape. so the skill calls the tool box itself. |
-| **contract interaction** | the queue helpers — `queue_tx.ts`, `queue_swap.ts` | the agent does not sign and does not send. a write becomes data: a queue payload the engine holds for a human to sign. |
+never call `near.call`, `generic_contract_call_fun`, or
+`generic_contract_call_wallet` from a skill bin. the tool box's
+`*_fun_json` helpers that CALL are reference material: take the
+argument shape, the gas, and the deposit from them, but emit a queue
+payload instead of sending. `generic_contract_call_wallet` needs a
+browser wallet — a skill bin runs in a terminal and must never sign.
 
-so the near-kit tool box supplies the **facts** of a contract — the
-argument shape, the gas, the deposit — and the queue helpers carry
-the **action**. when a skill needs to know a method's arguments, it
-reads the tool box. when it needs to do something, it queues.
+**the tool box supplies the facts; the queue helpers carry the action.**
 
-**do not use the tool box to interact with a contract.** the tool
-box's `*_fun_json` helpers that CALL are for reference only, and
-`generic_contract_call_wallet` needs a browser wallet this skill does
-not have. a skill bin runs in a terminal, has no wallet, and must
-never sign anything. the queue helpers are the only way a write
-leaves a skill.
+**why a queue and not a transaction.** the engine's queue is a batch of
+calls for a human to sign in one wallet popup. that gives three things
+a normal transaction does not:
 
-the chain reads go through the near-kit tool box —
-`@near-kit-tool-box/fun` for the typed helpers and
-`@near-kit-tool-box/env` for the server-side client. the client is
-built with `new Near({ network })` from the `near-kit` package, so the
-skills default to MAINNET; the env package's own default is testnet.
+- the human sees the whole batch before any of it runs
+- several calls that depend on each other run in one transaction, so
+  the receipt tree holds together
+- the proposal stays visible in a feed until somebody acts on it
 
----
-
-#### THE ONE THING TO GET RIGHT
-
-**queue the transaction; do not send it.**
-
-the engine queues a batch of calls for a human to review and sign in one
-wallet popup. the user may sign it now, later, or never. your job ends
-when the batch is queued and explained.
-
-do not:
-
-- ask the user to sign before the batch is queued — queue first, then
-  explain and let them decide
-- wait for a signature, poll for one, or claim that a transaction was sent
-- call a NEAR wallet or use a private key to sign
-
-if the user asks you to send, say that the engine's flow is human-signed:
-queue it, report the queue id, and let the human send it from the feed
-or queue page.
+so the agent's job is to prepare the batch and the human's job is to
+sign it. an agent that waits for a signature has misunderstood its
+role.
 
 ---
 
 #### THE FLOW
-
-use this order. each step exists because the next one can move money or
-fail silently.
 
 1. **understand the intent** — what the user wants changed, for which
    account, and why.
@@ -97,73 +70,62 @@ fail silently.
 4. **check the account and receiver** — `bin/check_contract.ts` and
    `bin/check_receiver.ts` verify that an account exists on chain. for
    a swap, `bin/balances.ts` says what the account actually holds, so
-   the input token is one they have. see NATIVE NEAR OR wNEAR.
+   the input token is one they have.
 5. **show the human a plain-language summary** — contract, method,
    arguments, gas, deposit, and what it will do.
 6. **queue the batch** — `bin/queue_tx.ts` or `bin/queue_swap.ts`.
-7. **report the queue id, the link, and the local copy path** — the id
-   and the link are how the human signs it; the local copy is the
-   user's backup and their record of what worked.
+7. **report the queue id, the link, and the local copy path**.
 8. **wait for the signature** — `bin/watch_queue.ts --queue <id>
    --until sent` waits for the human to sign, instead of you asking
-   them whether they have. see WATCHING THE LIVE FEED.
+   them whether they have.
 9. **report the send and check the chain** — the hash comes from the
    engine with `bin/queue_sent.ts --from-server`, and the outcome comes
-   from the chain with `bin/tx_status.ts`. the human never hands you a
-   hash. see AFTER THE HUMAN SENDS.
-10. **sync the local copy** — `bin/sync_queue.ts` refreshes the local
-    record with the server's current status.
+   from the chain with `bin/tx_status.ts`.
+10. **sync the local copy** — `bin/sync_queue.ts`.
 
-steps 2 through 5 are not paperwork. a wrong method or a wrong receiver
-often fails cleanly, but a wrong amount or a missing storage deposit
-often succeeds and moves the wrong thing.
+steps 2 through 5 are not paperwork. the engine records whatever it is
+given, so an agent that queues without verifying can queue a call that
+moves the wrong amount to the wrong place. a wrong method or receiver
+often fails cleanly; a wrong amount or a missing storage deposit often
+succeeds and moves the wrong thing.
 
----
-
-#### THE LOCAL COPY
-
-every queued item is written under:
-
-```text
-${HOME}/.shit-1170-rex-engine/
-├── accounts/
-│   └── <account_id>.json    # one private api key file per account
-├── contacts.json            # the contact list — the ft skill's, and this
-│                            # skill's too. one file, both skills.
-└── queue/
-    ├── index.json           # the list of every local record
-    ├── tx/<queue_id>.json   # one local copy per queued batch
-    └── swap/<swap_id>.json  # one local copy per queued swap
-```
-
-set `SHIT_1170_REX_HOME` to use a different directory.
-
-the local copy survives a database outage. it holds the request as the
-agent wrote it and the response as the server returned it, so it is a
-record of what was proposed, what was queued, and what happened next.
-
-`sync_queue.ts all` walks the local records, fetches the current server
-state, and updates the records that changed. use it after the user says
-they sent something, or when checking on an old queue.
+do not ask the user to sign before the batch is queued — queue first,
+then explain and let them decide. if the user asks you to send, say
+that the engine's flow is human-signed: queue it, report the queue id,
+and let the human send it from the feed or queue page.
 
 ---
 
-#### API KEYS
+#### WHAT TO CHECK BEFORE QUEUEING
 
-one key per account, in its own file with `0600` permissions:
+the engine does not validate the economics of a contract call. it
+records the call. verifying it is the agent's job.
 
-```sh
-bun bin/keyring.ts set --account alice.near --api-key <key>
-bun bin/keyring.ts list
-bun bin/keyring.ts whoami --account alice.near
-bun bin/keyring.ts remove --account alice.near
-```
+| check | how | what goes wrong without it |
+| --- | --- | --- |
+| contract exists | `check_contract.ts` | the call goes to a stranger's account |
+| method exists | `check_contract.ts` | `MethodNotFound` at signing time |
+| argument shape | the contract's ABI or a typed helper | a missing field fails; a wrong type may not |
+| gas | the contract skill or a tested helper | the first leg runs and the second does not |
+| deposit | the contract skill | `storage_deposit` fails or a token transfer is rejected |
+| receiver exists | `check_receiver.ts` | tokens go nowhere |
+| receiver has token storage | `storage_balance_of` | the transfer succeeds and the tokens vanish |
+| amount | `shit-1170-rex-unit-conversion` | a million times too much, or dust |
+| the account holds the input token | `balances.ts` | the swap is queued against money that is not there |
+| intent | the human | the right call doing the wrong thing |
 
-the list command never prints a key. `whoami` asks the server which
-account the key belongs to — use it when a key's account is uncertain.
+the last one is the one no tool can do. a technically correct call can
+still be the wrong thing to do.
 
-when more than one account is stored, every bin that queues work needs
-`--account <id>`. without it the bin refuses rather than guessing.
+`check_contract.ts` calls each method with EMPTY arguments, so a
+method that needs arguments fails. that failure does NOT mean the
+method is missing: the bin reports `exists: true` with `reason:
+"call_failed"`. only `reason: "method_not_found"` means the contract
+has no such method.
+
+use the contract skills for the specific protocol:
+`shit-1170-rex-ft` for fungible tokens,
+`shit-1170-rex-hello-sleet-near` for the greeting contract.
 
 ---
 
@@ -175,10 +137,9 @@ print JSON errors on stderr with a non-zero exit code.
 the `kind` column says where the answer comes from:
 
 - **chain VIEW** — a read straight from NEAR, through the near-kit
-  tool box. no API key, no server, no account. these bins work out of
-  the box.
-- **engine** — a read from or a write to the engine's server. these
-  bins need an API key (see API KEYS above).
+  tool box. no API key, no server, no account.
+- **engine** — a read from or a write to the engine's server. needs an
+  API key (see API KEYS).
 - **local** — no network at all. it reads or writes the local files.
 
 | bin | kind | what it does |
@@ -199,39 +160,55 @@ the `kind` column says where the answer comes from:
 | `token_info.ts` | engine | read token metadata like the website |
 
 **this skill is the engine's own surface.** the token and contract
-skills have their own bins, and they are the better ones:
-
-- the **FT** skill has `ft_balance.ts` (with the token's decimals and
-  symbol), `ft_metadata.ts`, `ft_transfer.ts` (with the contact-list
-  check, `ft_transfer_call`, `--memo`, `--gas`, `--deposit` and
-  `--with-storage-deposit`) and `contacts.ts`.
-- the **greeting** skill has `greeting.ts`, for `hello.sleet.near`.
-
+skills have their own bins, and they are the better ones — the **FT**
+skill has `ft_balance.ts`, `ft_metadata.ts`, `ft_transfer.ts`,
+`wrap.ts` and `contacts.ts`; the **greeting** skill has `greeting.ts`.
 use those skills for tokens and for the greeting contract. this skill
 queues the work and tracks it.
 
-the chain VIEW reads — `check_contract.ts`, `check_receiver.ts` and
-`tx_status.ts` — talk to NEAR
-through the near-kit tool box (`@near-kit-tool-box/fun` and
-`@near-kit-tool-box/env`). they need no API key and no engine
-account, so they are the right first step when the engine's key is not
-set up yet. they only ever call VIEW methods.
+the chain VIEW bins need no API key and no engine account, so they are
+the right first step when the engine's key is not set up yet. they only
+ever call VIEW methods. `tx_status.ts` is a chain read in that sense,
+but it reads the FastNear transactions API, not the NEAR JSON-RPC.
 
-the engine bins — `queue_tx.ts`, `queue_swap.ts`, `queue_list.ts`,
-`get_queue.ts`, `sync_queue.ts`, `queue_sent.ts`, `balances.ts`,
-`holders.ts` and `token_info.ts` — go through the engine's server and
-need an API key for the account.
+---
 
-`tx_status.ts` is a chain read in the sense that it needs no key, but
-it reads the FastNear transactions API, not the NEAR JSON-RPC.
+#### API KEYS
+
+one key per account, in its own file with `0600` permissions:
+
+```sh
+bun bin/keyring.ts set --account alice.near --api-key <key>
+bun bin/keyring.ts list
+bun bin/keyring.ts whoami --account alice.near
+bun bin/keyring.ts remove --account alice.near
+```
+
+the list command never prints a key. `whoami` asks the server which
+account the key belongs to — use it when a key's account is uncertain.
+
+when more than one account is stored, every bin that queues work needs
+`--account <id>`. without it the bin refuses rather than guessing. a
+batch queued for the wrong account lands in the wrong feed.
+
+one file per account rather than one file with all of them: a file for
+one account can be shared, moved, or deleted without touching the
+others, a rotation replaces one file, a leaked file leaks one account
+rather than every account, and the list can be shown without ever
+showing a key.
+
+the key must be one the ENGINE issued — get it from the site's
+`/app/skill.html` page. the local keyring supplies the signing key; the
+server checks its own `api_keys` table, so a key the server never
+issued answers 400 `account_not_named_by_agent`. the signing account
+also comes from the API key, so the key and the account must agree.
 
 ---
 
 #### WRITES ARE QUEUED, NEVER SENT
 
-a write is DATA, not an action. the skill emits the payload and the
-engine queues it for the human to sign. the exact shape the engine's
-tx-queue accepts:
+a write is DATA, not an action. the exact shape the engine's tx-queue
+accepts:
 
 ```json
 {
@@ -245,7 +222,7 @@ tx-queue accepts:
 
 - `contractId` — the contract account id.
 - `method` — the method name, exactly as the contract spells it.
-- `args` — the contract's own argument object.
+- `args` — the contract's own argument object, not a string.
 - `gas` — the gas, as a string.
 - `deposit` — the attached native NEAR, as a string.
 
@@ -255,29 +232,10 @@ near-kit's human forms — `"30 Tgas"`, `"0.00125 NEAR"`, `"1 yocto"` —
 and converts them, so a hand-written payload may use either. raw digits
 are preferred, because there is no ambiguity about what they mean.
 
-the swap queue takes a different shape:
-
-```json
-{
-  "tokenIn": "wrap.near",
-  "amountIn": "1500000000000000000000000",
-  "tokenOut": "usdt.tether-token.near",
-  "amountOut": "1250000",
-  "dexId": "rhea",
-  "what": "Buy USDC with wNEAR",
-  "when": "Now",
-  "why": "The user asked for it",
-  "whenAt": 1767225600000,
-  "accounts": ["alice.near"]
-}
-```
-
-`src/queue_payload.ts` builds the call payload with sane defaults
-(gas `30000000000000`, deposit `0`) and refuses a payload it cannot
-trust: an empty `contractId` or `method`, an `args` that is not a
-plain object, or a `gas`/`deposit` that is not a raw digit string.
-
-never build a near-kit transaction here. never call `near.call`.
+the middleman's `queue_payload` builder makes the payload with sane
+defaults (gas `30000000000000`, deposit `0`) and refuses a payload it
+cannot trust: an empty `contractId` or `method`, an `args` that is not
+a plain object, or a `gas`/`deposit` that is not a raw digit string.
 
 ---
 
@@ -318,24 +276,18 @@ bun bin/queue_tx.ts \
 ```
 
 the `accounts` list says whose feed receives the batch. every account in
-it must be an account the ENGINE has issued an API key for — get the key
-from the site's `/app/skill.html` page. the local keyring only supplies
-the SIGNING key; the server checks its own `api_keys` table, so a key
-the server never issued answers 400 `account_not_named_by_agent`. the
-signing account also comes from the API key, so the key and the account
-must agree.
+it must be an account the ENGINE has issued an API key for.
 
 `--accounts` may be omitted. the list then defaults to the signing
 account — the account the stored API key belongs to. an empty list
 would write zero account rows server-side, so the batch would land in
 nobody's feed.
 
-`gas` and `deposit` are decimal strings in yocto units. `deposit` is the
-amount of native NEAR attached. a `storage_deposit` often needs a real
-deposit, not `0`.
+`deposit` is the amount of native NEAR attached. a `storage_deposit`
+often needs a real deposit, not `0`.
 
-`--when-at <epoch_millis>` sets the queue's earliest execution time.
-it is a number — a typo is refused rather than silently queued with no
+`--when-at <epoch_millis>` sets the queue's earliest execution time. it
+is a number — a typo is refused rather than silently queued with no
 time. the same flag works on `queue_swap.ts`.
 
 ---
@@ -356,13 +308,32 @@ bun bin/queue_swap.ts \
 ```
 
 `amountIn` is the token's smallest unit. use the unit-conversion skill
-when the human gave a decimal amount.
+when the human gave a decimal amount. a file works too:
+`bun bin/queue_swap.ts --file swap.json`.
 
-a file works too:
+the payload shape:
 
-```sh
-bun bin/queue_swap.ts --file swap.json
+```json
+{
+  "tokenIn": "wrap.near",
+  "amountIn": "1500000000000000000000000",
+  "tokenOut": "usdt.tether-token.near",
+  "amountOut": "1250000",
+  "dexId": "rhea",
+  "what": "Buy USDC with wNEAR",
+  "when": "Now",
+  "why": "The user asked for it",
+  "whenAt": 1767225600000,
+  "accounts": ["alice.near"]
+}
 ```
+
+`amountOut` and `dexId` are optional — a swap may be queued without a
+quote, and the live quote is worked out when it is shown. `dexId`
+records where a stored quote came from.
+
+the token ids are the intear registry's ids — every token is its bare
+contract id, except native NEAR, which is `near`.
 
 `--when-at <epoch_millis>` sets the swap's earliest execution time, the
 same as on `queue_tx.ts`.
@@ -379,9 +350,6 @@ they do not have is a swap that cannot execute.
 ```sh
 bun bin/balances.ts --account alice.near --sources direct,native
 ```
-
-`balances.ts` answers with the account's native NEAR and its direct
-token balances, wNEAR among them. two cases:
 
 | the account holds | the swap's `tokenIn` is |
 | --- | --- |
@@ -403,26 +371,15 @@ quoting a swap out of native NEAR does not need a wrap step first.
 add a wrap-then-swap step to make the trade work. the router already
 handles native NEAR as the input side, and a wrapped hop costs gas,
 costs a second route, and needs storage on `wrap.near` before the
-tokens can land. so:
+tokens can land.
 
-```sh
-# the account holds native NEAR and no wNEAR
-bun bin/queue_swap.ts \
-  --token-in near \
-  --amount-in 1000000000000000000000000 \
-  --token-out usdt.tether-token.near \
-  --what "Buy USDC with 1 NEAR" \
-  --accounts alice.near
-```
-
-**never assume wNEAR because a token is called "NEAR".** the token
-named `wrap.near` is wNEAR. the chain's own coin is `near`. a swap
-that sells `wrap.near` out of an account with no wNEAR balance is
-queued against money that is not there.
+**never assume wNEAR because a token is called "NEAR".** a swap that
+sells `wrap.near` out of an account with no wNEAR balance is queued
+against money that is not there.
 
 if the human asked to spend native NEAR and the account also holds
-wNEAR, queue the native side. it is the coin they named, and it is
-the side that needs no wrap step.
+wNEAR, queue the native side. it is the coin they named, and it is the
+side that needs no wrap step.
 
 **the amount for `near` is in yoctoNEAR — 24 decimals.** 1 NEAR is
 `1000000000000000000000000`. use the unit-conversion skill to check it
@@ -432,12 +389,10 @@ the same way you check any other token's amount.
 
 #### REPORTING THE QUEUE ID AND THE SIGNING LINK
 
-**every queued item gets an id and a link. always give both.**
-
-the id is what the human quotes back to you ("check queue
-`abc-123`"), and the link is what they click to sign it. an id
-without a link makes the human go hunting through the feed for a
-proposal they cannot recognise by id alone.
+**every queued item gets an id and a link. always give both.** the id
+is what the human quotes back to you; the link is what they click to
+sign it. an id without a link makes the human go hunting through the
+feed for a proposal they cannot recognise by id alone.
 
 | what was queued | id field | the link to give them |
 | --- | --- | --- |
@@ -446,23 +401,7 @@ proposal they cannot recognise by id alone.
 
 a swap's link carries the whole trade, so the human lands on the swap
 already set up and their execution is credited back to the queued
-proposal. the four parameters are explained below.
-
-the bins print the id themselves — `queueId` for a batch, `swapId` for
-a swap — so read it from their stdout. do not make it up, and do not
-paraphrase it.
-
-say it like this:
-
-> queued as `abc-123` — sign it at
-> <https://shit-1170.com/app/queue.html?queue=abc-123>
-
-for a swap:
-
-> queued as swap `abc-123` — sign it at
-> <https://shit-1170.com/app/swap.html?in=wrap.near&out=usdt.tether-token.near&amount_in=1500000000000000000000000&swap=abc-123>
-
-### the swap link's four parameters
+proposal. the four parameters:
 
 | parameter | what it is |
 | --- | --- |
@@ -481,8 +420,17 @@ the other three pre-fill the form, so the human does not retype the
 trade. `amount_in` is the raw unit amount, not the human one — 1.5
 USDC is `1500000`, and 1.5 NEAR is `1500000000000000000000000`.
 
-the queue id is not a receipt. it means "the engine is holding this for
-you to sign", not "this happened".
+the bins print the id themselves — `queueId` for a batch, `swapId` for
+a swap — so read it from their stdout. do not make it up, and do not
+paraphrase it.
+
+say it like this:
+
+> queued as `abc-123` — sign it at
+> <https://shit-1170.com/app/queue.html?queue=abc-123>
+
+**the queue id is not a receipt.** it means "the engine is holding this
+for you to sign", not "this happened".
 
 ---
 
@@ -507,15 +455,28 @@ the `nextCursor` is opaque. hand it back exactly as the server gave it.
 
 #### AFTER THE HUMAN SENDS
 
+the whole sequence, in order:
+
+1. the human signs in the web app. their wallet tells the engine, and
+   the engine writes the hash on the account row.
+2. `watch_queue.ts --queue <id> --until sent` — the agent waits
+   instead of asking.
+3. `queue_sent.ts tx --queue <id> --from-server` — the hash comes from
+   the engine. the human never supplies one.
+4. `tx_status.ts --tx-hash <hash>` — the receipt on chain, which is
+   the real outcome.
+5. `sync_queue.ts one tx <id>` — the local copy matches the server.
+
+steps 3 and 4 answer two different questions. step 3 asks the engine
+what it recorded. step 4 asks the chain what happened.
+
 **the human does not have to hand you the hash. the engine already has
 it.**
 
-when the human signs, their wallet reports the send to the engine, and
-the engine writes the hash on the account row. so the hash is already
-there, and you read it back out of the queue you queued:
+the hash is already there, and you read it back out of the queue you
+queued:
 
 ```sh
-# the hash, from the engine
 bun bin/get_queue.ts tx --id <queue_id>
 ```
 
@@ -651,18 +612,8 @@ object:
 {"ok":true,"event":"queue","id":"<id>","statuses":["pending"],"new":true,"localChanged":true}
 ```
 
-then, at the end:
-
-```json
-{
-  "ok": true,
-  "watched": 120,
-  "until": "sent",
-  "connected": true,
-  "reached": true,
-  "events": [ ... ]
-}
-```
+the summary carries `watched` (the seconds), `until`, `connected`,
+`reached`, and the `events` array.
 
 **the log on stderr says what the json cannot.** stdout carries the
 events; stderr carries the state of the watch:
@@ -697,20 +648,34 @@ check an old queue without waiting for anything.
 
 ---
 
-#### THE WHOLE AFTER-THE-SEND FLOW
+#### THE LOCAL COPY
 
-1. the human signs in the web app. their wallet tells the engine, and
-   the engine writes the hash on the account row.
-2. `watch_queue.ts --queue <id> --until sent` — the agent waits
-   instead of asking.
-3. `queue_sent.ts tx --queue <id> --from-server` — the hash comes from
-   the engine. the human never supplies one.
-4. `tx_status.ts --tx-hash <hash>` — the receipt on chain, which is
-   the real outcome.
-5. `sync_queue.ts one tx <id>` — the local copy matches the server.
+every queued item is written under:
 
-steps 3 and 4 answer two different questions. step 3 asks the engine
-what it recorded. step 4 asks the chain what happened.
+```text
+${HOME}/.shit-1170-rex-engine/
+├── accounts/
+│   └── <account_id>.json    # one private api key file per account
+├── contacts.json            # the ft skill's contact list
+└── queue/
+    ├── index.json           # the list of every local record
+    ├── tx/<queue_id>.json   # one local copy per queued batch
+    └── swap/<swap_id>.json  # one local copy per queued swap
+```
+
+set `SHIT_1170_REX_HOME` to use a different directory.
+
+the local copy survives a database outage. it holds the request as the
+agent wrote it and the response as the server returned it, so it is a
+record of what was proposed, what was queued, and what happened next.
+
+`sync_queue.ts all` walks the local records, fetches the current server
+state, and updates the records that changed. use it after the user says
+they sent something, or when checking on an old queue.
+
+the local records are also how an agent learns. a queue that failed
+again and again has a method shape or a gas value that is wrong. the
+records make that visible without a database.
 
 ---
 
@@ -752,56 +717,22 @@ after queueing, tell the human, in plain language:
 - the local copy path
 - that it is waiting for their signature, and that they can send it later
 
+keep it readable. the person reading it may be deciding whether to
+approve a transaction that moves their money, and raw JSON alone does
+not tell them whether it is reasonable.
+
 the queue id and the link go together. the id is what the human quotes
-back to you; the link is where they sign it. see REPORTING THE QUEUE
-ID AND THE SIGNING LINK above.
+back to you; the link is where they sign it.
 
 do not describe a queued batch as sent, submitted, or executed.
 
 ---
 
-#### RESEARCH BEFORE QUEUEING
-
-the engine does not validate the economics of a contract call. it
-records the call. verifying the call is the agent's job.
-
-check, in this order:
-
-1. **contract id** — `bin/check_contract.ts --id <contract>` confirms the
-   account exists and can probe methods.
-2. **method name** — inspect the deployed ABI, or use the matching
-   contract skill. a method that does not exist fails with
-   `MethodNotFound`.
-
-the probe in `check_contract.ts` calls each method with EMPTY
-arguments, so a method that needs arguments fails. that failure does
-NOT mean the method is missing: the bin reports `exists: true` with
-`reason: "call_failed"` and the error text. only `reason:
-"method_not_found"` means the contract has no such method.
-3. **argument shape** — copy it from the contract's own JSON serializer
-   or a typed helper. a missing field fails loudly; a wrong field type
-   may not.
-4. **gas** — enough for the whole receipt tree, including the callbacks
-   a DEX or token makes. a swap that runs out of prepaid gas can succeed
-   in its first leg and fail in its second.
-5. **deposit** — `1` yoctoNEAR for `ft_transfer` and `ft_transfer_call`;
-   the contract's real minimum for `storage_deposit`.
-6. **storage** — the receiver needs NEP-145 storage on the token, or a
-   successful transfer sends the tokens nowhere.
-7. **amount** — verify the raw unit amount against the token's decimals.
-
-use the contract skills for the specific protocol:
-
-- `shit-1170-rex-ft` for fungible tokens
-- `shit-1170-rex-hello-sleet-near` for the greeting contract
-
----
-
 #### MORE
 
-- [TOOLS.md](./DOCS/TOOLS.md) — where the facts come from
-- [WORKFLOW.md](./DOCS/WORKFLOW.md) — the shared agent workflow
-- [ENGINE.md](./DOCS/ENGINE.md) — the routes, shapes, and pages
+- [ENGINE.md](./DOCS/ENGINE.md) — the routes, the data model, and the pages
+- the library's [TOOLS.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/DOCS/TOOLS.md)
+  — where the facts come from
 
 =====================
 <br/>

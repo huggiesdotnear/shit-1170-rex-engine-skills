@@ -8,73 +8,15 @@ description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the 
 the NEP-141 / NEP-145 fungible token standard, with the safety checks
 a token transfer needs.
 
-- live site: <https://shit-1170.com/>
-- code: <https://github.com/huggiesdotnear/shit-1170-rex-engine>
-
 use the general `shit-1170-rex-engine` skill for the queueing
-mechanics. this skill holds the token-specific parts.
+mechanics and the architecture. this skill holds the token-specific
+parts.
 
----
-
-#### THE ARCHITECTURE
-
-**the agent NEVER calls a contract.**
-
-every state-changing call goes through the rex engine as a QUEUED
-generic function call, and a HUMAN signs it in the web app with their
-wallet. so:
-
-- this skill only needs VIEW methods to read chain state.
-- for a write, this skill emits a QUEUE PAYLOAD —
-  `{ contractId, method, args, gas, deposit }` — the exact shape the
-  engine's tx-queue accepts. the engine queues it for a human to
-  sign. it is NOT a near-kit transaction and NOT a `near.call`.
-- never call `near.call`, `generic_contract_call_fun`, or
-  `generic_contract_call_wallet` from a skill bin. the `*_fun_json`
-  helpers that CALL (not view) are for reference only: use their
-  argument shape, gas, and deposit, but emit a queue payload instead
-  of sending.
-
-**queue the transaction; do not send it.** the engine queues a batch
-for a human to sign in one wallet popup. your job ends when the batch
-is queued and explained. never claim a transaction was sent.
-
-**the split is where the reads come from and where the writes go.**
-
-- **view calls** go to the near-kit tool box, directly. a view is a
-  read: no API key, no engine account, and the tool box has a typed
-  helper for most of them.
-- **contract interaction** goes to the queue helpers. the agent does
-  not sign and does not send — a write becomes a queue payload the
-  engine holds for a human.
-
-the tool box supplies the **facts** of a contract — the argument
-shape, the gas, the deposit. the queue helpers carry the **action**.
-never use the tool box to interact with a contract: its `*_fun_json`
-helpers that CALL are reference material, and
-`generic_contract_call_wallet` needs a browser wallet this skill does
-not have.
-
----
-
-#### THE TOOLS
-
-the chain reads go through the near-kit tool box:
-
-- `@near-kit-tool-box/fun` — typed helpers with Zod-validated
-  answers. `ft_balance_of_fun_json`, `ft_metadata_fun_json`,
-  `ft_total_supply_fun_json`, and `generic_contract_view_fun_json`
-  for the views that have no dedicated helper.
-- `@near-kit-tool-box/env` — the server-side client setup.
-- `near-kit` — the client itself. the skill builds
-  `new Near({ network })` from it, so the default is MAINNET. the env
-  package's own default is testnet, which is why the skills do not
-  use its client directly.
-
-`@near-kit-tool-box/web` is the BROWSER-wallet variant. it needs a
-browser wallet and `localStorage`. the frontend uses it. this skill
-does not — a skill bin runs in a terminal, has no wallet, and must
-never sign anything.
+**the rules that apply here too:** the agent never calls a contract. a
+read goes to the near-kit tool box (`@near-kit-tool-box/fun`); a write
+emits a QUEUE PAYLOAD for the engine to queue for a human to sign.
+never `near.call`, never `generic_contract_call_fun`, never
+`generic_contract_call_wallet`.
 
 ---
 
@@ -92,6 +34,15 @@ standard fixes some of them and says nothing about the rest. where it
 says nothing, this skill says "not documented" and the bins use the
 engine's own working values. do not present a working value as a
 guarantee.
+
+the chain reads go through the near-kit tool box:
+`@near-kit-tool-box/fun` for the typed helpers
+(`ft_balance_of_fun_json`, `ft_metadata_fun_json`,
+`ft_total_supply_fun_json`, and `generic_contract_view_fun_json` for
+the views that have no dedicated helper) and `near-kit` for the client,
+built with `new Near({ network })` so the default is MAINNET.
+`@near-kit-tool-box/env` defaults to testnet, which is why the skills
+do not use its client directly.
 
 ---
 
@@ -214,30 +165,10 @@ transaction.
 
 ---
 
-#### WRITES ARE QUEUED, NEVER SENT
+#### THE WRITE PAYLOADS
 
 every CALL method above produces a QUEUE PAYLOAD — data, not an
 action. the engine queues it and a human signs it.
-
-```json
-{
-  "contractId": "usdt.tether-token.near",
-  "method": "ft_transfer",
-  "args": { "receiver_id": "sleet.near", "amount": "1500000" },
-  "gas": "30000000000000",
-  "deposit": "1"
-}
-```
-
-- `contractId` — the token contract's account id.
-- `method` — the method name, exactly as the contract spells it.
-- `args` — the contract's own argument object.
-- `gas` — the gas, as a raw digit string of gas units.
-- `deposit` — the attached native NEAR, as a raw digit string of
-  yoctoNEAR.
-
-the payload for each write method, with the real argument shape, gas,
-and deposit:
 
 | method | args | gas | deposit |
 | --- | --- | --- | --- |
@@ -246,11 +177,14 @@ and deposit:
 | `storage_deposit` | `{}` | not documented by the standard (engine working value: 30 Tgas) | the token's own `storage_balance_bounds.min` (0.00125 NEAR for USDT) |
 | `storage_withdraw` | `{}` | not documented by the standard | 1 yoctoNEAR |
 
-`gas` and `deposit` are raw digit strings here. the web app's
-`shared/gas_deposit.ts` also accepts near-kit's human forms —
-`"30 Tgas"`, `"0.00125 NEAR"`, `"1 yocto"` — and converts them, so a
-hand-written payload may use either. raw digits are preferred,
-because there is no ambiguity about what they mean.
+`contractId` is the token contract's account id. `method` is the
+method name, exactly as the contract spells it. `args` is the
+contract's own argument object. `gas` and `deposit` are raw digit
+strings — gas units and yoctoNEAR. the web app's `shared/gas_deposit.ts`
+also accepts near-kit's human forms (`"30 Tgas"`, `"0.00125 NEAR"`,
+`"1 yocto"`) and converts them, so a hand-written payload may use
+either. raw digits are preferred, because there is no ambiguity about
+what they mean.
 
 ---
 
@@ -320,6 +254,36 @@ confirm the contract id the same way as any other address.
    deposit, the queue id, the link to sign it, and the fact that it
    waits for a signature.
 
+### the storage trap
+
+if the receiver has no storage on the token, registering it is part of
+the batch. two queue payloads, in this order:
+
+```json
+[
+  {
+    "contractId": "usdt.tether-token.near",
+    "method": "storage_deposit",
+    "args": {},
+    "gas": "30000000000000",
+    "deposit": "1250000000000000000000"
+  },
+  {
+    "contractId": "usdt.tether-token.near",
+    "method": "ft_transfer",
+    "args": { "receiver_id": "sleet.near", "amount": "1500000" },
+    "gas": "30000000000000",
+    "deposit": "1"
+  }
+]
+```
+
+the two calls run in one batch, in that order. the transfer only gets
+tokens after the deposit lands.
+
+use the token's own `storage_balance_bounds` for the exact minimum —
+0.00125 NEAR is the standard floor, not a promise.
+
 ### native NEAR is not a token
 
 **NEAR the coin is not wNEAR the token.** the chain's own coin has the
@@ -378,37 +342,6 @@ bun bin/wrap.ts --direction unwrap --amount 1500000000000000000000000
 the whole reference, with the payloads and the conditional rule, is in
 [WRAP.NEAR.md](./DOCS/WRAP.NEAR.md).
 
-
-### the storage trap
-
-if the receiver has no storage on the token, registering it is part of
-the batch. two queue payloads, in this order:
-
-```json
-[
-  {
-    "contractId": "usdt.tether-token.near",
-    "method": "storage_deposit",
-    "args": {},
-    "gas": "30000000000000",
-    "deposit": "1250000000000000000000"
-  },
-  {
-    "contractId": "usdt.tether-token.near",
-    "method": "ft_transfer",
-    "args": { "receiver_id": "sleet.near", "amount": "1500000" },
-    "gas": "30000000000000",
-    "deposit": "1"
-  }
-]
-```
-
-the two calls run in one batch, in that order. the transfer only gets
-tokens after the deposit lands.
-
-use the token's own `storage_balance_bounds` for the exact minimum —
-0.00125 NEAR is the standard floor, not a promise.
-
 ---
 
 #### THE BINS
@@ -426,6 +359,14 @@ use the token's own `storage_balance_bounds` for the exact minimum —
 all of them print JSON on stdout and JSON errors on stderr with a
 non-zero exit code. a refusal — a receiver that is not on the contact
 list — exits 2.
+
+`ft_transfer.ts` takes `--token`, `--receiver`, and `--amount` (the raw
+unit amount). `--memo <text>` adds the optional memo, `--gas` and
+`--deposit` override the gas (in gas units) and the attached deposit
+(in yoctoNEAR), both as raw digit strings, and `--msg <json>` makes it
+an `ft_transfer_call`. `--force` overrides the contact-list refusal,
+and `--with-storage-deposit` adds the token's storage registration to
+the batch.
 
 the general skill has the rest: `balances.ts`, `holders.ts`,
 `token_info.ts`, `check_contract.ts`, `check_receiver.ts`.

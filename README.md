@@ -39,13 +39,10 @@ set `SHIT_1170_REX_HOME` to use another directory.
 ## docs
 
 - [TOOLS.md](./DOCS/TOOLS.md) — where the facts come from, and the middleman packages used
-- [WORKFLOW.md](./shit-1170-rex-engine/DOCS/WORKFLOW.md) — the shared agent workflow
 - [ENGINE.md](./shit-1170-rex-engine/DOCS/ENGINE.md) — the engine's routes, data model, and pages
 
-there are two TOOLS.md files, on purpose. the one above covers the
-whole library; the engine skill keeps its own, scoped to that skill's
-sources, at
-[shit-1170-rex-engine/DOCS/TOOLS.md](./shit-1170-rex-engine/DOCS/TOOLS.md).
+the engine skill owns the queueing mechanics and the architecture. the
+token and contract skills hold their own facts and link to it.
 
 ## the rule every skill follows
 

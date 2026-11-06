@@ -2,9 +2,9 @@
 
 the sources and the clients the shit-1170 rex skills use.
 
-this file is scoped to the whole library. for the engine skill's own
-sources, see its
-[TOOLS.md](../shit-1170-rex-engine/DOCS/TOOLS.md).
+this file is scoped to the whole library. the engine skill's own routes
+and data model are in its
+[ENGINE.md](../shit-1170-rex-engine/DOCS/ENGINE.md).
 
 ---
 
@@ -22,33 +22,6 @@ routes. it exposes one function per route and one type per request and
 response shape. the bins call it, so the shapes they send are the
 shapes the server accepts.
 
-| route | what it does |
-| --- | --- |
-| `GET /api/shit-1170/ping` | liveness |
-| `POST /api/shit-1170/api-keys` | exchange signed messages for API keys |
-| `GET /api/shit-1170/api-key/me` | which account a key belongs to |
-| `POST /api/shit-1170/api-key/rotate` | issue a new key for an account |
-| `GET /api/shit-1170/tx-queue` | the filterable list of queued batches |
-| `POST /api/shit-1170/tx-queue` | queue a batch of function calls |
-| `GET /api/shit-1170/tx-queue/{queue_id}` | one queued batch |
-| `POST /api/shit-1170/tx-queue/{queue_id}/accounts` | add your own account |
-| `DELETE /api/shit-1170/tx-queue/{queue_id}/accounts/{account_id}` | remove your own account |
-| `POST /api/shit-1170/tx-queue/{queue_id}/sent` | report sent hashes and outcomes |
-| `GET /api/shit-1170/tx-queue/facets` | contracts and accounts with queued work |
-| `GET /api/shit-1170/tx-queue/stats/contracts` | queued call counts per contract |
-| `GET /api/shit-1170/tx-queue/stats/methods` | queued call counts per method |
-| `GET /api/shit-1170/feed/ws` | the LIVE feed, a websocket upgrade |
-| `GET /api/shit-1170/swap-queue` | the filterable list of queued swaps |
-| `POST /api/shit-1170/swap-queue` | queue a swap |
-| `GET /api/shit-1170/swap-queue/{swap_id}` | one queued swap |
-| `POST /api/shit-1170/swap-queue/{swap_id}/accounts` | add your own account |
-| `DELETE /api/shit-1170/swap-queue/{swap_id}/accounts/{account_id}` | remove your own account |
-| `POST /api/shit-1170/swap-queue/{swap_id}/sent` | report the send |
-| `GET /api/trezu/user/treasuries` | the Sputnik DAOs an account belongs to |
-
-the API key travels in the `x-api-key` header. `x-session-token` is the
-legacy name and is still accepted.
-
 ---
 
 #### SLEET JS MIDDLEMAN PACKAGES
@@ -62,11 +35,6 @@ it and one place to change it.
 - `@sleet-js/middleman-rhea-api` — `https://api.rhea.finance`
 - `@near-kit-tool-box/fun` — typed, Zod-validated NEAR contract helpers
 - `@near-kit-tool-box/env` — the server-side NEAR KIT client setup
-
-the near-kit tool box packages are v0.3.0. the middleman is v0.0.5 —
-the live feed's typed client, `api_shit_1170_feed_ws`, arrived in
-v0.0.3, its `on_connect` callback in v0.0.4, and the argument parsing
-and the JSON printing in v0.0.5.
 
 the middleman also holds the tool primitives every bin uses: the
 argument parsing and the JSON printing. they live there because the
@@ -155,9 +123,6 @@ the authoritative method list of a deployed contract:
 near contract inspect <contract_id> network-config mainnet now
 ```
 
-`near contract inspect` reports the build the account runs, not the
-newest build. check each account you intend to call.
-
 ---
 
 #### FASTNEAR TRANSACTIONS API
@@ -206,13 +171,6 @@ yet**, never guessed.
 
 `near contract inspect` reports the build that account runs, not the
 newest build, so check each account you intend to call.
-
-**the tool box is for reads; the queue is for writes.** a view call
-goes to the tool box directly. a state-changing call goes to the
-queue helpers, and a human signs it. the tool box's `*_fun_json`
-helpers that CALL are reference material — read the argument shape,
-gas, and deposit from them, but emit a queue payload rather than
-sending.
 
 ---
 

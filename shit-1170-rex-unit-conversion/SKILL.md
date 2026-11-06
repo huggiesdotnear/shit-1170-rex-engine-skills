@@ -13,7 +13,7 @@ token's real decimals.
 
 ---
 
-#### WHY THIS SKILL EXISTS
+#### WHY THE DECIMALS ARE THE WHOLE JOB
 
 A NEAR token amount has two forms, and they are not interchangeable:
 
@@ -26,39 +26,12 @@ factor of `10**decimals` is not a rounding error — it is a
 24-decimal token paying out a million times too much, or a dust
 amount that transfers nothing at all.
 
-So the decimals are not a detail. They are the whole conversion.
-
----
-
-#### USE THIS AS A CHECK, NOT ONLY AS A TOOL
-
-The most valuable thing this skill does is **confirm** a number that
-was worked out elsewhere. Most agents can do the arithmetic. What
-happens instead is that one of them does the arithmetic from memory,
-assumes the decimals, and never checks.
-
-That assumption is the danger, and it fails quietly:
-
-- "NEAR has 24 decimals" is right, so the assumption sticks, and then
-  it is carried over to a 6-decimal token — where it is wrong by a
-  factor of a million
-- an amount that is too large pays out too much, and the transaction
-  succeeds
-- an amount that is too small is dust, and the transaction succeeds and
-  moves nothing
-
-Neither failure announces itself. A checked amount is the whole
-difference.
-
-So: if an amount is going into a transfer, a swap, a router call or a
-contract argument, **look the decimals up rather than assuming them**,
-and check the amount you arrived at against what this skill says. The
-bin is fast, it is one call, and it takes the guessing out of the
-picture.
-
-This is also the case when a number comes from somewhere else — an
-explorer row, a contract's `ft_metadata`, a previous message, a doc.
-Double checking it costs one call. Being wrong costs the money.
+Neither failure announces itself. An amount that is too large pays out
+too much and the transaction succeeds; an amount that is too small is
+dust and the transaction succeeds and moves nothing. So this skill is
+worth using as a **check** on a number that was worked out elsewhere,
+not only as a converter — the arithmetic is easy, the assumption about
+the decimals is the danger.
 
 ---
 

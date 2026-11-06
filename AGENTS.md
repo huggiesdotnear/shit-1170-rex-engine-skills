@@ -117,6 +117,10 @@ does not change shape halfway through:
 6. **follow it** — sync the local record with the server after the
    human sends, and read the receipt on chain.
 
+the engine skill spells the same flow out with the bins to run at each
+step: see THE FLOW in
+[shit-1170-rex-engine/SKILL.md](./shit-1170-rex-engine/SKILL.md).
+
 steps 2 and 3 are what make the skill worth using. the engine records
 whatever it is given, so an agent that queues without verifying can
 queue a call that moves the wrong amount to the wrong place.

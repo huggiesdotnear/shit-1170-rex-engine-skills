@@ -10,19 +10,6 @@ see [SKILL.md](./SKILL.md)
 
 ---
 
-#### THE ARCHITECTURE
-
-**the agent never calls a contract.** it reads chain state with VIEW
-methods and emits QUEUE PAYLOADS —
-`{ contractId, method, args, gas, deposit }` — which the engine queues
-for a human to sign in the web app.
-
-the chain reads go through the near-kit tool box
-(`@near-kit-tool-box/fun`), with the client built from `near-kit` so
-the default network is mainnet.
-
----
-
 #### THE BINS
 
 ```sh
