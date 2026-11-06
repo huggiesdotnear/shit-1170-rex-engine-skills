@@ -32,6 +32,9 @@ export type { QUEUE_CALL };
 // registration in front of it.
 export * from "./wrap_near";
 
+// the local account list, read only. no key is ever read or printed.
+export * from "./accounts";
+
 export interface SHIT_1170_FT_TRANSFER_REQUEST {
   tokenId: string;
   receiverId: string;

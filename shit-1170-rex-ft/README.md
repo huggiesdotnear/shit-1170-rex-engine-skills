@@ -84,8 +84,17 @@ calls to the contract.
   `near_deposit` cannot mint to it
 - what is the contract's live storage minimum?
 
-`wrap.ts` prints the queue payload and sends nothing. a wrap carries
-its storage registration in the same batch, in front of the deposit.
+`wrap.ts` prints the queue payload and sends nothing.
+
+**the storage registration in a wrap is CONDITIONAL.** the bin reads
+the account's registration and includes the `storage_deposit` only when
+the account is missing it — so an account that has wrapped before gets
+a one-call batch, and a first-time account gets a two-call batch. a
+redundant registration would waste 0.00125 NEAR and a call.
+
+`--with-storage-deposit auto|yes|no` overrides the read.
+
+the full reference is in [DOCS/WRAP.NEAR.md](./DOCS/WRAP.NEAR.md).
 
 =====================
 <br/>

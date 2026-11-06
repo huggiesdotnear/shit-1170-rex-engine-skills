@@ -22,3 +22,10 @@ export function shit_1170_home_dir_fun(): string {
 export function shit_1170_contacts_path_fun(): string {
   return join(shit_1170_home_dir_fun(), "contacts.json");
 }
+
+// the accounts the engine holds a key for. the engine skill owns the
+// keyring; this skill only READS the account ids, so a bin can pick
+// the signing account for a read that needs one.
+export function shit_1170_accounts_dir_fun(): string {
+  return join(shit_1170_home_dir_fun(), "accounts");
+}
