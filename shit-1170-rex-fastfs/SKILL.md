@@ -105,19 +105,26 @@ receipt fails the way a FastFS receipt always fails, the file never
 appears at its URL, and the CDN caches the 404.
 
 **and the wallet decides how the bytes cross.** the wallets split in
-two, and they want opposite things:
+two, and the second kind cannot do it at all:
 
 | the wallet | what it wants |
 | --- | --- |
 | the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | the bytes, as a `Uint8Array` |
-| the **wallet-server** wallets — the Intear Wallet is one | the **base64 string** |
+| the **wallet-server** wallets — the Intear Wallet is one | **nothing works** |
 
-the wallet-server wallets read the transaction out of json on their
-own server, and their native action holds the arguments as `Vec<u8>`
-with `#[serde_as(as = "Base64")]` — so their native path wants a
-base64 **string**. their fallback path takes a json value and writes
-it out with `serde_json::to_vec`, and that is the one that turns the
-bytes into the json text of a byte map.
+a wallet-server wallet cannot carry raw bytes. it reads the
+transaction out of json and writes the arguments back out with
+`serde_json::to_vec`, and **every json value serializes to text** — a
+`Uint8Array` becomes the json text of a byte map, and a base64 string
+becomes the json text of a string. neither is the file's bytes. its
+native action *could* carry them, but its action enum is
+`#[serde(untagged)]` and `serde_as` does not work through an untagged
+enum, so the native variant never matches and the fallback always does.
+
+**so a FastFS upload only works through a browser-signer wallet.** the
+app asks the connected wallet which one it is and refuses the call
+outright when the wallet cannot carry the bytes — a refused call tells
+the reader, and a dropped call tells them nothing.
 
 **how to tell, from the chain, which of the two happened.** decode
 the action's `args` from base64 and look at the first bytes.
@@ -126,6 +133,7 @@ the action's `args` from base64 and look at the first bytes.
 | --- | --- |
 | `00 0f 00 00 00 …` | borsh — the variant byte, then a u32 length. correct |
 | `7b 22 30 22 3a …` — the text `{"0":` | json — the bytes were stringified. broken |
+| `22 41 41 38 …` — the text `"AA8` | a base64 string, quoted — the bytes were never decoded. broken |
 
 the json one is longer than the borsh it replaced, because every byte
 became a key, a colon and a number. a 52-byte borsh payload arrives

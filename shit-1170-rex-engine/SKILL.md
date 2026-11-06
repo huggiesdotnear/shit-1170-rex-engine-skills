@@ -266,22 +266,28 @@ at its URL, and nothing anywhere says why.
 so the bytes must cross every boundary as bytes. **how** depends on
 the wallet, and the wallets split in two.
 
-| the wallet | what it does with the arguments | what the app sends |
+| the wallet | what it does with the arguments | can it carry bytes |
 | --- | --- | --- |
-| the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | take them as a `Uint8Array` and borsh-serialize the whole transaction in the browser | the bytes, in the connector action shape |
-| the **wallet-server** wallets — the Intear Wallet is one | hand the transaction to their own server as json and read the arguments out of that json | the **base64 string**, in the near-api-js action shape |
+| the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | take them as a `Uint8Array` and borsh-serialize the whole transaction in the browser | **yes** |
+| the **wallet-server** wallets — the Intear Wallet is one | hand the transaction to their own server as json, read the arguments out of that json, and write them out with `serde_json::to_vec` | **no** |
 
-the **wallet-server** wallets read their arguments from json, and their
-native action type holds them as `Vec<u8>` with
-`#[serde_as(as = "Base64")]` — so their native path wants a base64
-**string**. their fallback path takes a json value and writes it out
-with `serde_json::to_vec`, and that is the one that turns the bytes
-into the json text of a byte map.
+**a wallet-server wallet cannot carry raw bytes at all.** its write
+path takes the arguments as a `serde_json::Value` and serializes that
+value, and **every json value serializes to text**. a `Uint8Array`
+becomes the json text of a byte map; a base64 string becomes the json
+text of a string. neither is the file's bytes.
+
+its native action *could* carry them — it holds the arguments as
+`Vec<u8>` — but that path is unreachable: its action enum is
+`#[serde(untagged)]`, and `serde_as` does not work through an untagged
+enum, so the native variant never matches and the fallback always does.
 
 **so the app asks the connected wallet which one it is** — the
 connector hands back the wallet, and the wallet carries its manifest,
-and the manifest carries the wallet's id — and gives it the shape it
-reads.
+and the manifest carries the wallet's id — and **refuses** a call that
+carries bytes when the wallet cannot carry them. a refused call is a
+reader who knows; a dropped call is a reader who approved something
+that cannot work and was told nothing.
 
 the jsonified blob also explains itself: **the keys come out in
 lexicographic order** (`0,1,10,11,…,2,20,…`), because `serde_json`'s
@@ -296,10 +302,11 @@ the action's `args` from base64 and look at the first bytes.
 | --- | --- |
 | `00 0f 00 00 00 …` | borsh. the variant byte, then a u32 length. correct |
 | `7b 22 30 22 3a …` — the text `{"0":` | json. the bytes were stringified. broken |
+| `22 41 41 38 …` — the text `"AA8` | a base64 string, quoted. the bytes were never decoded |
 
-the second one is `JSON.stringify` of a byte array. it is longer than
-the borsh it replaced, because every byte became a key, a colon and a
-number.
+the second one is `JSON.stringify` of a byte array, and the third is a
+base64 string that was stringified rather than decoded. both are longer
+than the borsh they replaced.
 
 `gas` and `deposit` are raw digit strings here: gas units and
 yoctoNEAR. the web app's `shared/gas_deposit.ts` also accepts
