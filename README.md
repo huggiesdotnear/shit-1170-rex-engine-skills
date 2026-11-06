@@ -23,7 +23,9 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 - [shit-1170-rex-ft](./shit-1170-rex-ft/SKILL.md) — NEP-141 token transfers, contact list, receiver checks, wrapping and unwrapping NEAR through wrap.near
   - [WRAP.NEAR.md](./shit-1170-rex-ft/DOCS/WRAP.NEAR.md) — the wrap.near contract, the payloads, and the conditional storage registration
 - [shit-1170-rex-hello-sleet-near](./shit-1170-rex-hello-sleet-near/SKILL.md) — the hello.sleet.near greeting contract
+- [shit-1170-rex-fastfs](./shit-1170-rex-fastfs/SKILL.md) — FastFS file uploads: the borsh payload, the chunking rule, the limits, and the serving URL
 - [shit-1170-rex-unit-conversion](./shit-1170-rex-unit-conversion/SKILL.md) — human amounts to chain units, using the token's real decimals
+- [shit-1170-rex-fastfs](./shit-1170-rex-fastfs/SKILL.md) — FastFS file uploads: the borsh payloads, the chunking, and the serving URL
 
 ## the local store
 

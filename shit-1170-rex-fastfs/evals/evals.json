@@ -1,0 +1,35 @@
+{
+  "skill_name": "shit-1170-rex-fastfs",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Upload this picture.png to my FastFS space on the shit-1170 engine. Make it so I can sign it.",
+      "expected_output": "Checks the file first with fastfs_check.ts (size, mime, path length, and whether it fits in one call), then prepares the queue payload with fastfs_upload.ts: contractId fastfs.near, method __fastdata_fastfs, the raw borsh bytes base64-encoded in argsBase64 (not args), gas 1, deposit 0. Queues it with the engine skill's queue_tx.ts, explains the file, path, mime, gas and deposit, reports the queue id and the signing link, and states plainly that the receipt will fail with CodeDoesNotExist by design and that the serving URL is the thing to verify.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "This video is 2.4 MB. Put it on FastFS for me — it's bigger than a megabyte.",
+      "expected_output": "Recognises that a file over 1 MiB is split into 1 MiB chunks, one Partial transaction per chunk, and that every chunk carries the same full_size and the same nonce with offsets 0, 1 MiB, 2 MiB. Produces a batch of three queue payloads with argsBase64, a fresh nonce in 1..=2147483647, checks the file against the indexer's limits (path 1024, mime 256, chunk 1 MiB, file 32 MiB) before queuing, and tells the human the chunks may be signed in any order and the file appears only after every chunk is indexed.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I signed the FastFS upload you queued and the receipt says it failed with CodeDoesNotExist on fastfs.near. Did it not work?",
+      "expected_output": "Explains plainly that the failed receipt is the expected shape of a FastFS upload and not a failure: the receiver has no contract and does not need one, the FastData indexer does not look at receipt status, and it reads the transaction's bytes instead. Confirms through the serving URL with the cache-busting ?v= query using fastfs_status.ts, using the predecessor (the signing account) as the host rather than the receiver, and does not tell the human the upload failed.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Before I upload this, can you check it? The path is a really long folder name and I don't know the mime type.",
+      "expected_output": "Runs fastfs_check.ts and reports the size, the mime (guessed from the extension, or the need for an explicit --mime when it cannot be guessed), the path length against the 1024-character limit, the mime length against the 256-character limit, the file size against the 32 MiB limit, and whether the file fits one call or needs chunks. Names the specific limit broken for each failure and refuses the upload with a non-zero exit rather than queueing something the indexer would drop silently.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Where exactly will the file be served from once it's indexed? I want the link and also the fastfs:// form for a post.",
+      "expected_output": "Uses fastfs_url.ts to build https://{predecessor}.fastfs.io/{receiver}/{relative_path} and the fastfs://{predecessor}/{receiver}/{path} URI form, making clear that the host is the account that SIGNED the transaction (the receipt's predecessor) and not the receiver, and that the file appears only after the indexer has processed the final block plus about 2-3 seconds, and that the CDN caches 404s so polling must use a cache-busting query.",
+      "files": []
+    }
+  ]
+}

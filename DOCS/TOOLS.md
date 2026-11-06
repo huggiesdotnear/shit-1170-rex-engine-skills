@@ -187,6 +187,35 @@ and `dexes/minimal` are the venues. a sub-dex view is reached through
 
 ---
 
+#### FASTDATA
+
+FastData is the FastNear indexing layer that reads transactions off the
+chain without needing a contract on the receiver. FastFS is its file
+standard: a `__fastdata_fastfs` function call whose **arguments are raw
+borsh bytes**, and the indexer reads the file out of the transaction.
+
+- docs: <https://hackmd.io/@fastnear/fastfs-docs>
+- server: <https://github.com/fastnear/fastfs-server>
+- indexer: <https://github.com/fastnear/fastdata-indexer>
+- drag and drop: <https://github.com/fastnear/fastdata-drag-and-drop>
+- the borsh schema lives in the indexer, in
+  `fastfs-sub-indexer/src/fastfs.rs` — that file is the authority on the
+  payload and the limits
+- the `social-kv/1` standard documents how the data is read back:
+  <https://near.social/standard.md>
+
+**the args are raw bytes, not base64.** the docs say "base64" because
+that is how the json-rpc presents a `Vec<u8>`, but the indexer runs
+`borsh::from_slice` on the bytes themselves. a payload that is
+base64-encoded twice indexes as garbage.
+
+**the receipt fails, by design.** the receiver has no contract, so the
+call ends in `CodeDoesNotExist`. the indexer does not read the receipt
+status, so the file is still indexed. a failed receipt is the normal
+outcome of a successful upload.
+
+---
+
 #### DOCS
 
 - NEAR: <https://docs.near.org/>

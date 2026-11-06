@@ -125,7 +125,8 @@ has no such method.
 
 use the contract skills for the specific protocol:
 `shit-1170-rex-ft` for fungible tokens,
-`shit-1170-rex-hello-sleet-near` for the greeting contract.
+`shit-1170-rex-hello-sleet-near` for the greeting contract,
+`shit-1170-rex-fastfs` for FastFS file uploads.
 
 ---
 
@@ -226,6 +227,31 @@ accepts:
 - `gas` — the gas, as a string.
 - `deposit` — the attached native NEAR, as a string.
 
+**some contracts take their arguments as raw bytes, not as an object.**
+the FastFS protocol (`__fastdata_fastfs`) wants borsh bytes, and a json
+object cannot be borsh bytes. such a call carries `argsBase64` — the
+standard base64 of the raw bytes — *instead of* `args`:
+
+```json
+{
+  "contractId": "fastfs.near",
+  "method": "__fastdata_fastfs",
+  "argsBase64": "AAwAAABmYXN0bmVhci5wbmc=",
+  "gas": "1",
+  "deposit": "0"
+}
+```
+
+a transaction sets **exactly one** of `args` and `argsBase64`. both at
+once is a `400` (`args_and_args_base64`); a base64 that does not decode
+is a `400` (`args_base64_not_base64`); neither is an empty `args`, which
+is what a call with no arguments has always been.
+
+the browser decodes the base64 back into bytes and hands the **bytes**
+to the wallet, so the raw payload reaches the chain as it is. use
+`argsBase64` only when the contract's arguments really are bytes — see
+the `shit-1170-rex-fastfs` skill.
+
 `gas` and `deposit` are raw digit strings here: gas units and
 yoctoNEAR. the web app's `shared/gas_deposit.ts` also accepts
 near-kit's human forms — `"30 Tgas"`, `"0.00125 NEAR"`, `"1 yocto"` —
@@ -236,8 +262,10 @@ are preferred, because there is no ambiguity about what they mean.
 middleman's `queue_call_fun` builds a SINGLE call with sane defaults
 (gas `30000000000000`, deposit `0`) and refuses a payload it cannot
 trust: an empty `contractId` or `method`, an `args` that is not a
-plain object, or a `gas`/`deposit` that is not a raw digit string.
-the ft skill's payload builders use it; this skill's bins do not.
+plain object, an `args_base64` that is not base64, a payload carrying
+both kinds of args, or a `gas`/`deposit` that is not a raw digit
+string. the ft skill's payload builders use it; this skill's bins do
+not.
 
 ---
 
