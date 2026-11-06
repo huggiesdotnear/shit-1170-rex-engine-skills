@@ -252,6 +252,34 @@ to the wallet, so the raw payload reaches the chain as it is. use
 `argsBase64` only when the contract's arguments really are bytes — see
 the `shit-1170-rex-fastfs` skill.
 
+#### THE BYTES MUST REACH THE WALLET AS BYTES
+
+**a `Uint8Array` handed to `JSON.stringify` does not survive.** it
+becomes a json object whose keys are the byte indexes —
+`{"0":0,"1":15,…}` — and that is no longer borsh. the indexer reads
+the action's args with `borsh::from_slice`, so a jsonified byte array
+is not borsh, and the action is **dropped silently**: the receipt
+fails the way a FastFS receipt always fails, the file never appears
+at its URL, and nothing anywhere says why.
+
+so the browser must pass the bytes through **as bytes**. decode the
+base64 into a `Uint8Array` and hand that to the wallet, and never
+let the value pass through `JSON.stringify` on the way. if the
+browser's own code turns the bytes into a plain object, the payload
+is broken before the wallet sees it.
+
+**how to tell, from the chain, which of the two happened:** decode
+the action's `args` from base64 and look at the first bytes.
+
+| the first bytes of the action's args | what it means |
+| --- | --- |
+| `00 0f 00 00 00 …` | borsh. the variant byte, then a u32 length. correct |
+| `7b 22 30 22 3a …` — the text `{"0":` | json. the bytes were stringified. broken |
+
+the second one is `JSON.stringify` of a byte array. it is longer than
+the borsh it replaced, because every byte became a key, a colon and a
+number.
+
 `gas` and `deposit` are raw digit strings here: gas units and
 yoctoNEAR. the web app's `shared/gas_deposit.ts` also accepts
 near-kit's human forms — `"30 Tgas"`, `"0.00125 NEAR"`, `"1 yocto"` —

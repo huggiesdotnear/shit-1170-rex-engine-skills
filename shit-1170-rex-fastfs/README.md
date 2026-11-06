@@ -29,7 +29,32 @@ bun bin/fastfs_url.ts --predecessor alice.near --relative-path picture.png
 
 # is it there yet?
 bun bin/fastfs_status.ts --predecessor alice.near --relative-path picture.png --for 120
+
+# what did the action's args actually look like on chain?
+bun bin/fastfs_args.ts --tx <tx_hash>
 ```
+
+## the bytes have to reach the wallet as bytes
+
+the args are bytes. if they pass through `JSON.stringify` on the way
+to the wallet, they become the json text of a byte map:
+
+```text
+{"0":0,"1":15,"10":47,"11":115,…}
+```
+
+the indexer reads the action's args with `borsh::from_slice`, so that
+is not borsh, and **the action is dropped silently** — no error, the
+receipt fails the way a FastFS receipt always fails, and the file
+never appears at its URL.
+
+a 52-byte borsh payload arrives as 425 bytes of json. `fastfs_args.ts`
+tells the two apart by the first bytes:
+
+| the first bytes of the action's args | what it means |
+| --- | --- |
+| `00 0f 00 00 00 …` | borsh — correct |
+| `7b 22 30 22 3a …` — the text `{"0":` | json — the bytes were stringified |
 
 ## the borsh payload
 
