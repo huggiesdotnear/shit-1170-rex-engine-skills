@@ -232,10 +232,12 @@ near-kit's human forms — `"30 Tgas"`, `"0.00125 NEAR"`, `"1 yocto"` —
 and converts them, so a hand-written payload may use either. raw digits
 are preferred, because there is no ambiguity about what they mean.
 
-the middleman's `queue_payload` builder makes the payload with sane
-defaults (gas `30000000000000`, deposit `0`) and refuses a payload it
-cannot trust: an empty `contractId` or `method`, an `args` that is not
-a plain object, or a `gas`/`deposit` that is not a raw digit string.
+`queue_tx.ts` takes the batch as raw json and posts it as it is. the
+middleman's `queue_call_fun` builds a SINGLE call with sane defaults
+(gas `30000000000000`, deposit `0`) and refuses a payload it cannot
+trust: an empty `contractId` or `method`, an `args` that is not a
+plain object, or a `gas`/`deposit` that is not a raw digit string.
+the ft skill's payload builders use it; this skill's bins do not.
 
 ---
 

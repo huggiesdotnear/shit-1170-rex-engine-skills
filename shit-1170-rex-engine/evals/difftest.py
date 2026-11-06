@@ -9,6 +9,10 @@ Runs the bins' argument parsing and local-file behaviour:
 - tx_status exists and refuses a missing --tx-hash
 - ft transfer preparation rejects a malformed amount
 
+the contacts and the ft transfer bins live in the ft skill, so those
+tests reach into the sibling folder. they are skipped when it is not
+there.
+
 Run: python3 evals/difftest.py <skill-dir>
 """
 
@@ -54,6 +58,9 @@ def main() -> int:
         return 2
     skill_dir = Path(sys.argv[1]).resolve()
 
+    # the contacts and the token bins live in the ft skill, not here.
+    ft_dir = skill_dir.parent / "shit-1170-rex-ft"
+
     with tempfile.TemporaryDirectory() as temp:
         home = Path(temp)
 
@@ -83,24 +90,25 @@ def main() -> int:
             "the account list leaked the api key",
         )
 
-        code, out = run_bun(
-            skill_dir,
-            home,
-            "contacts.ts",
-            "add",
-            "--account",
-            "bob.near",
-            "--label",
-            "Bob",
-        )
-        expect(code == 0, f"contacts add failed: {out}")
-        expect(out["contact"]["accountId"] == "bob.near", f"wrong contact: {out}")
+        if ft_dir.exists():
+            code, out = run_bun(
+                ft_dir,
+                home,
+                "contacts.ts",
+                "add",
+                "--account",
+                "bob.near",
+                "--label",
+                "Bob",
+            )
+            expect(code == 0, f"contacts add failed: {out}")
+            expect(out["contact"]["accountId"] == "bob.near", f"wrong contact: {out}")
 
-        code, out = run_bun(skill_dir, home, "contacts.ts", "has", "--account", "bob.near")
-        expect(code == 0 and out.get("has") is True, f"contact not found: {out}")
+            code, out = run_bun(ft_dir, home, "contacts.ts", "has", "--account", "bob.near")
+            expect(code == 0 and out.get("has") is True, f"contact not found: {out}")
 
-        code, out = run_bun(skill_dir, home, "contacts.ts", "has", "--account", "nobody.near")
-        expect(code == 0 and out.get("has") is False, f"contact wrongly found: {out}")
+            code, out = run_bun(ft_dir, home, "contacts.ts", "has", "--account", "nobody.near")
+            expect(code == 0 and out.get("has") is False, f"contact wrongly found: {out}")
 
         code, out = run_bun(skill_dir, home, "queue_list.ts", "help")
         expect(code == 0, f"queue_list help failed: {out}")
@@ -128,7 +136,6 @@ def main() -> int:
             f"wrong error for a missing --tx-hash: {out}",
         )
 
-        ft_dir = skill_dir.parent / "shit-1170-rex-ft"
         if ft_dir.exists():
             code, out = run_bun(
                 ft_dir,

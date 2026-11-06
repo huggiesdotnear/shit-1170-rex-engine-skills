@@ -186,6 +186,15 @@ also accepts near-kit's human forms (`"30 Tgas"`, `"0.00125 NEAR"`,
 either. raw digits are preferred, because there is no ambiguity about
 what they mean.
 
+these payloads are built with the middleman's `queue_call_fun`, which
+makes a single call with sane defaults (gas `30000000000000`, deposit
+`0`) and refuses a payload it cannot trust: an empty `contractId` or
+`method`, an `args` that is not a plain object, or a `gas`/`deposit`
+that is not a raw digit string. this skill wraps it in named helpers —
+`shit_1170_ft_transfer_queue_call_fun`,
+`shit_1170_ft_transfer_call_queue_call_fun`,
+`shit_1170_storage_deposit_queue_call_fun` — and the bins use those.
+
 ---
 
 #### THE CONTACT LIST
