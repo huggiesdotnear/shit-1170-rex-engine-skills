@@ -33,8 +33,8 @@
     },
     {
       "id": 6,
-      "prompt": "I uploaded notes/small.txt through the web app and it is still 404 at https://nonresistant.near.fastfs.io/fastfs.near/notes/small.txt. The receipt failed with CodeDoesNotExist like you said it would. The tx hash is 3e3KZu8Jqpj42wUehjHPMeizaLzQeDVGf7cyGyLYhfwe. What went wrong?",
-      "expected_output": "Does not blame the slow indexer: a file that never appears is not a lagging indexer. Runs fastfs_args.ts --tx on the hash, reads the answer 'jsonified', and says the action's args are the JSON text of a byte map rather than borsh — the bytes were stringified on the way to the wallet, so the indexer dropped the action silently and the file was never indexed. Explains that the failed CodeDoesNotExist receipt is the normal FastFS shape and hid the real fault, that the CDN has now cached the 404, and that the file must be re-sent with the bytes reaching the wallet as bytes.",
+      "prompt": "I uploaded notes/small.txt through the web app and it is still 404 at https://nonresistant.near.fastfs.io/fastfs.near/notes/small.txt. The receipt failed with CodeDoesNotExist like you said it would. What went wrong?",
+      "expected_output": "Does not blame the slow indexer: a file that never appears is not a lagging indexer. Names the real reasons in order — the bytes did not reach the chain as bytes (the indexer found no borsh and dropped the action, and the failed CodeDoesNotExist receipt hid it), a chunk is missing, the nonce is wrong, or the indexer is behind. Notes that a FastFS upload goes out through the Intear Wallet and that the engine's web app refuses a byte-carrying call for any other wallet, so the first reason does not happen through the app. Tells the human that the CDN has now cached the 404.",
       "files": []
     }
   ]

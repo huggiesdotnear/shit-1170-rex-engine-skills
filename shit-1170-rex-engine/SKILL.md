@@ -228,9 +228,8 @@ accepts:
 - `deposit` — the attached native NEAR, as a string.
 
 **some contracts take their arguments as raw bytes, not as an object.**
-the FastFS protocol (`__fastdata_fastfs`) wants borsh bytes, and a json
-object cannot be borsh bytes. such a call carries `argsBase64` — the
-standard base64 of the raw bytes — *instead of* `args`:
+such a call carries `argsBase64` — the standard base64 of the raw bytes —
+*instead of* `args`:
 
 ```json
 {
@@ -247,66 +246,10 @@ once is a `400` (`args_and_args_base64`); a base64 that does not decode
 is a `400` (`args_base64_not_base64`); neither is an empty `args`, which
 is what a call with no arguments has always been.
 
-the browser decodes the base64 back into bytes and hands the **bytes**
-to the wallet — but the wallet then carries them to its signer in its
-own way, and that way differs per wallet. see THE BYTES MUST REACH THE
-WALLET AS BYTES below. use `argsBase64` only when the contract's
-arguments really are bytes — see the `shit-1170-rex-fastfs` skill.
-
-#### THE BYTES MUST REACH THE WALLET AS BYTES
-
-**a `Uint8Array` handed to `JSON.stringify` does not survive.** it
-becomes a json object whose keys are the byte indexes —
-`{"0":0,"1":15,…}` — and that is no longer borsh. the indexer reads
-the action's args with `borsh::from_slice`, so a jsonified byte array
-is not borsh, and the action is **dropped silently**: the receipt
-fails the way a FastFS receipt always fails, the file never appears
-at its URL, and nothing anywhere says why.
-
-so the bytes must cross every boundary as bytes. **how** depends on
-the wallet, and the wallets split in two.
-
-| the wallet | what it does with the arguments | can it carry bytes |
-| --- | --- | --- |
-| the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | take them as a `Uint8Array` and borsh-serialize the whole transaction in the browser | **yes** |
-| the **wallet-server** wallets — the Intear Wallet is one | hand the transaction to their own server as json, read the arguments out of that json, and write them out with `serde_json::to_vec` | **no** |
-
-**a wallet-server wallet cannot carry raw bytes at all.** its write
-path takes the arguments as a `serde_json::Value` and serializes that
-value, and **every json value serializes to text**. a `Uint8Array`
-becomes the json text of a byte map; a base64 string becomes the json
-text of a string. neither is the file's bytes.
-
-its native action *could* carry them — it holds the arguments as
-`Vec<u8>` — but that path is unreachable: its action enum is
-`#[serde(untagged)]`, and `serde_as` does not work through an untagged
-enum, so the native variant never matches and the fallback always does.
-
-**so the app asks the connected wallet which one it is** — the
-connector hands back the wallet, and the wallet carries its manifest,
-and the manifest carries the wallet's id — and **refuses** a call that
-carries bytes when the wallet cannot carry them. a refused call is a
-reader who knows; a dropped call is a reader who approved something
-that cannot work and was told nothing.
-
-the jsonified blob also explains itself: **the keys come out in
-lexicographic order** (`0,1,10,11,…,2,20,…`), because `serde_json`'s
-map is a `BTreeMap`. javascript's `JSON.stringify` orders integer-like
-keys numerically, so a lexicographic order means a **Rust** side
-produced it.
-
-**how to tell, from the chain, which of the two happened:** decode
-the action's `args` from base64 and look at the first bytes.
-
-| the first bytes of the action's args | what it means |
-| --- | --- |
-| `00 0f 00 00 00 …` | borsh. the variant byte, then a u32 length. correct |
-| `7b 22 30 22 3a …` — the text `{"0":` | json. the bytes were stringified. broken |
-| `22 41 41 38 …` — the text `"AA8` | a base64 string, quoted. the bytes were never decoded |
-
-the second one is `JSON.stringify` of a byte array, and the third is a
-base64 string that was stringified rather than decoded. both are longer
-than the borsh they replaced.
+use `argsBase64` only when the contract's arguments really are bytes. the
+FastFS protocol (`__fastdata_fastfs`) is the one that needs them, and
+the `shit-1170-rex-fastfs` skill has the payload, the borsh schema, the
+chunking rule and the limits.
 
 `gas` and `deposit` are raw digit strings here: gas units and
 yoctoNEAR. the web app's `shared/gas_deposit.ts` also accepts

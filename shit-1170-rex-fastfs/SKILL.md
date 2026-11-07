@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-fastfs
-description: Prepare FastFS file uploads with the shit-1170 rex engine — the __fastdata_fastfs method, the borsh payload format, the 1 MiB chunking rule, the 32 MiB file limit, the serving URL on fastfs.io, and the queue payloads for a human to sign. Use this skill whenever the user mentions FastFS, fastfs.io, fastdata, __fastdata_fastfs, uploading a file to the chain, storing a file on NEAR, a file's fastfs:// URI, serving a file from an account's namespace, or a media upload that needs borsh-encoded bytes. Also use it when a FastFS receipt failed with CodeDoesNotExist, when an uploaded file never appears at its fastfs.io URL, or when a FastFS action's args turned out to be JSON instead of borsh. Emit a queue payload for a human to sign; never send it yourself.
+description: Prepare FastFS file uploads with the shit-1170 rex engine — the __fastdata_fastfs method, the borsh payload format, the 1 MiB chunking rule, the 32 MiB file limit, the serving URL on fastfs.io, and the queue payloads for a human to sign. Use this skill whenever the user mentions FastFS, fastfs.io, fastdata, __fastdata_fastfs, uploading a file to the chain, storing a file on NEAR, a file's fastfs:// URI, serving a file from an account's namespace, or a media upload that needs borsh-encoded bytes. Also use it when a FastFS receipt failed with CodeDoesNotExist, or when an uploaded file never appears at its fastfs.io URL. Emit a queue payload for a human to sign; never send it yourself.
 ---
 
 # shit-1170 rex FastFS
@@ -86,64 +86,26 @@ base64-encoded in `argsBase64` — that is the JSON envelope, not the
 wire format. the engine decodes `argsBase64` back to raw bytes before
 it becomes the action's args, and that is what the indexer reads.
 
-### --- THE BYTES MUST CROSS EVERY BOUNDARY AS BYTES ---
+### --- THE WALLET HAS TO CARRY THE BYTES ---
 
-**this is the one thing that breaks a FastFS upload, and it breaks it
-silently.**
+**the bytes have to reach the chain as bytes, and the wallet is what
+carries them there.**
 
-the bytes have to reach the chain as bytes. if they pass through
-`JSON.stringify` — or are turned into a plain object on the way — the
-action's args become the **json text** of a byte map:
+the indexer reads the action's args with `borsh::from_slice`, so
+anything that is not borsh is not a file. if the bytes are turned into
+json text on the way to the signer — the json text of a byte map, or
+the json text of a quoted string — the indexer finds no borsh and
+**drops the action**: the receipt fails the way a FastFS receipt
+always fails, the file never appears at its URL, and the CDN caches
+the 404.
 
-```
-{"0":0,"1":15,"10":47,"11":115,…}
-```
+**a FastFS upload goes out through the Intear Wallet**, and only
+through it. the app asks the connected wallet which one it is and
+refuses a byte-carrying call for any other wallet — a refused call
+tells the reader, and a dropped call tells them nothing.
 
-that is not borsh. the indexer does `borsh::from_slice` on the raw
-args, gets nothing, and **drops the action**. there is no error: the
-receipt fails the way a FastFS receipt always fails, the file never
-appears at its URL, and the CDN caches the 404.
-
-**and the wallet decides how the bytes cross.** the wallets split in
-two, and the second kind cannot do it at all:
-
-| the wallet | what it wants |
-| --- | --- |
-| the **browser-signer** wallets — MyNearWallet, OKX, Nightly, HOT Wallet | the bytes, as a `Uint8Array` |
-| the **wallet-server** wallets — the Intear Wallet is one | **nothing works** |
-
-a wallet-server wallet cannot carry raw bytes. it reads the
-transaction out of json and writes the arguments back out with
-`serde_json::to_vec`, and **every json value serializes to text** — a
-`Uint8Array` becomes the json text of a byte map, and a base64 string
-becomes the json text of a string. neither is the file's bytes. its
-native action *could* carry them, but its action enum is
-`#[serde(untagged)]` and `serde_as` does not work through an untagged
-enum, so the native variant never matches and the fallback always does.
-
-**so a FastFS upload only works through a browser-signer wallet.** the
-app asks the connected wallet which one it is and refuses the call
-outright when the wallet cannot carry the bytes — a refused call tells
-the reader, and a dropped call tells them nothing.
-
-**how to tell, from the chain, which of the two happened.** decode
-the action's `args` from base64 and look at the first bytes.
-
-| the first bytes of the action's args | what it means |
-| --- | --- |
-| `00 0f 00 00 00 …` | borsh — the variant byte, then a u32 length. correct |
-| `7b 22 30 22 3a …` — the text `{"0":` | json — the bytes were stringified. broken |
-| `22 41 41 38 …` — the text `"AA8` | a base64 string, quoted — the bytes were never decoded. broken |
-
-the json one is longer than the borsh it replaced, because every byte
-became a key, a colon and a number. a 52-byte borsh payload arrives
-as 425 bytes of json.
-
-**and the json text says which wallet did it.** the keys come out in
-**lexicographic** order — `0,1,10,11,…,2,20,…` — because
-`serde_json`'s map is a `BTreeMap`. javascript's `JSON.stringify`
-orders integer-like keys *numerically*, so a lexicographic order means
-a **Rust** side produced it, and that points at the wallet-server kind.
+the engine's web app handles the shape; this skill's job is to build
+the payload and queue it.
 
 ### the borsh schema
 
@@ -318,19 +280,24 @@ is the indexer being slow, not the upload being broken.
 
 ### --- THE URL STAYS A 404 ---
 
-**a file that never appears at its URL is not a slow indexer.** run
-`bin/fastfs_args.ts --tx <tx_hash>` and read the answer.
+**a file that never appears at its URL is not a slow indexer.** the
+usual reasons, in the order they happen:
 
-- `borsh` — the bytes reached the chain intact. the problem is
-  elsewhere: the chunk is missing, the nonce is wrong, or the indexer
-  is behind.
-- `jsonified` — the bytes were stringified on the way to the wallet.
-  **the file was never indexed and never will be.** re-send it with the
-  bytes going through as bytes.
+1. **the bytes did not reach the chain as bytes.** the indexer read the
+   action's args, found no borsh, and dropped the action. this is the
+   one that looks like a success: the receipt fails the way a FastFS
+   receipt always fails, so nothing is red, and the CDN caches the 404
+   for good.
+2. **a chunk is missing.** the file is served only after **every**
+   chunk is indexed.
+3. **the nonce is wrong.** the chunks do not belong to one upload, so
+   the server does not join them.
+4. **the indexer is behind.** the block that carries the transaction
+   has not been indexed yet.
 
-the jsonified case is the one that looks like a success. the receipt
-fails the way a FastFS receipt always fails, so nothing is red, and
-the CDN caches the 404 for good.
+the engine's web app refuses a byte-carrying call for a wallet that
+cannot carry the bytes, so the first reason does not happen through
+the app.
 
 ---
 
@@ -342,7 +309,6 @@ the CDN caches the 404 for good.
 | `fastfs_check.ts` | inspect a file: the size, the mime, whether it fits one call, how many chunks, and every limit it breaks |
 | `fastfs_url.ts` | the serving URL and the `fastfs://` URI, for a predecessor, a receiver and a path |
 | `fastfs_status.ts` | poll the serving URL with a cache-busting query, and report when it returns 200 |
-| `fastfs_args.ts` | read a transaction's action args off the chain and say whether they are borsh or stringified json |
 
 all of them print JSON on stdout and JSON errors on stderr with a
 non-zero exit code. a refusal — a file that breaks an indexer limit —
@@ -394,16 +360,6 @@ the serving URL, and the poll for it:
 bun bin/fastfs_url.ts --predecessor alice.near --relative-path picture.png
 bun bin/fastfs_status.ts --predecessor alice.near --relative-path picture.png --for 120
 ```
-
-**a file that never appears at its URL** — ask the chain what the
-action's args actually were:
-
-```sh
-bun bin/fastfs_args.ts --tx <tx_hash>
-```
-
-it says `borsh` or `jsonified`, and it names the fix. a `jsonified`
-answer means the bytes were stringified on the way to the wallet.
 
 the queue payload for a human to sign looks like this:
 
