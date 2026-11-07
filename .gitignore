@@ -3,7 +3,22 @@ node_modules/
 dist/
 .tsbuildinfo
 *.tsbuildinfo
-bun.lock
+
+# --- WHY bun.lock IS TRACKED ---
+# every skill here is a package that agents install and run, so the
+# versions an agent gets are part of what this repo ships. a lockfile
+# pins them.
+#
+# it matters most for the young packages. the explorer api client is
+# the engine's own parser, and the tool box pins its borsh codec to an
+# exact version because that library's API may still move. without a
+# lock, a clone gets whatever resolves that day, and a skill that
+# verified its facts against one build stops matching the next one.
+#
+# the lockfile diff is also the dependency diff: a change to what a
+# skill depends on is visible in the review, not hidden in a manifest.
+#
+# bun.lock
 
 # python bytecode
 __pycache__/
