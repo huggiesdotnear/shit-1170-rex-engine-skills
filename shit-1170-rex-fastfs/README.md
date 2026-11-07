@@ -29,7 +29,26 @@ bun bin/fastfs_url.ts --predecessor alice.near --relative-path picture.png
 
 # is it there yet?
 bun bin/fastfs_status.ts --predecessor alice.near --relative-path picture.png --for 120
+
+# what did a signed upload actually put up?
+bun bin/fastfs_tx.ts --tx-hash <hash>
 ```
+
+## reading a file back off a transaction
+
+`fastfs_tx.ts` works on a transaction on chain, where the other bins
+work on a file on disk. it reports what the transaction uploaded: the
+path, the mime, the size, whether it was a delete, the serving URL and
+the `fastfs://` URI, and every limit the payload breaks.
+
+it reads the bytes through `@sleet-js/fastnear-explorer-api-client` —
+the same package the engine's web app uses. the explorer's decoder
+**never throws**: a payload that is not FastFS borsh decodes to `null`,
+so a transaction with no FastFS upload in it is a normal answer.
+
+the content is left out of the output. a 121 KB png is 162 KB of
+base64 on stdout, and it buries the facts. `--with-content` asks for
+it explicitly.
 
 ## the bytes have to reach the wallet as bytes
 

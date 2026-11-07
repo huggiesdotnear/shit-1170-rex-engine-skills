@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-fastfs
-description: Prepare FastFS file uploads with the shit-1170 rex engine — the __fastdata_fastfs method, the borsh payload format, the 1 MiB chunking rule, the 32 MiB file limit, the serving URL on fastfs.io, and the queue payloads for a human to sign. Use this skill whenever the user mentions FastFS, fastfs.io, fastdata, __fastdata_fastfs, uploading a file to the chain, storing a file on NEAR, a file's fastfs:// URI, serving a file from an account's namespace, or a media upload that needs borsh-encoded bytes. Also use it when a FastFS receipt failed with CodeDoesNotExist, or when an uploaded file never appears at its fastfs.io URL. Emit a queue payload for a human to sign; never send it yourself.
+description: Prepare FastFS file uploads with the shit-1170 rex engine — the __fastdata_fastfs method, the borsh payload format, the 1 MiB chunking rule, the 32 MiB file limit, the serving URL on fastfs.io, and the queue payloads for a human to sign. Use this skill whenever the user mentions FastFS, fastfs.io, fastdata, __fastdata_fastfs, uploading a file to the chain, storing a file on NEAR, a file's fastfs:// URI, serving a file from an account's namespace, or a media upload that needs borsh-encoded bytes. Also use it to read a FastFS upload back off a transaction — what path, mime, size or delete a signed upload carried — and when a FastFS receipt failed with CodeDoesNotExist, or when an uploaded file never appears at its fastfs.io URL. Emit a queue payload for a human to sign; never send it yourself.
 ---
 
 # shit-1170 rex FastFS
@@ -275,7 +275,10 @@ is the indexer being slow, not the upload being broken.
    it — and say plainly that **the receipt will fail and that is
    expected**.
 5. **the human signs it.**
-6. **poll the URL** — `bin/fastfs_status.ts`, with the cache-busting
+6. **read the upload back** — `bin/fastfs_tx.ts --tx-hash <hash>`. the
+   path, the mime, the size, whether it was a delete, and the serving
+   URL, off the transaction the human just signed.
+7. **poll the URL** — `bin/fastfs_status.ts`, with the cache-busting
    query. **the URL is the answer, not the receipt.**
 
 ### --- THE URL STAYS A 404 ---
@@ -301,12 +304,74 @@ the app.
 
 ---
 
+#### READING A FILE BACK OFF A TRANSACTION
+
+**the upload bins work on a file on disk. `fastfs_tx.ts` works on a
+transaction on chain.**
+
+an agent that gets a tx hash — from the engine after a human signed, or
+read off the chain any other way — needs to know what the transaction
+actually put up. `fastfs_tx.ts` answers that:
+
+```sh
+bun bin/fastfs_tx.ts --tx-hash <hash>
+```
+
+it reports, for each upload in the transaction: the path, the mime,
+the size, whether it was a delete, the serving URL and the `fastfs://`
+URI, and **every limit the payload breaks**. the content itself is left
+out — a 121 KB png is 162 KB of base64 on stdout — and `--with-content`
+asks for it explicitly.
+
+| it says | what it means |
+| --- | --- |
+| `kind` | `simple` — one whole file in one transaction. `partial` — one 1 MiB chunk of a bigger file |
+| `size` | for a simple upload, the FILE's size. for a partial one, **this chunk's** size |
+| `totalSize` | for a partial upload, the WHOLE file's size. `0` for a simple one, whose `size` already says it |
+| `offset` | for a partial upload, where this chunk starts. `0` for a simple one |
+| `nonce` | for a partial upload, the nonce every chunk of one upload shares. `0` for a simple one |
+| `isDelete` | a delete is a simple upload with no content. it carries no mime |
+| `problems` | every limit the payload breaks, named. an empty list means the indexer will take it |
+
+**the receipt is still not the answer.** a FastFS upload's receipt fails
+with `CodeDoesNotExist` by design, so a `failed` status on the
+transaction says nothing about the file. the serving URL is the thing to
+verify.
+
+a hash the API does not answer with is a **normal answer**, not a
+failure: the API answers with fewer transactions than asked for. the bin
+lists those hashes under `missing` and exits non-zero.
+
+`--network testnet` reads the testnet API. at most 20 hashes per call.
+
+### --- HOW IT READS THE BYTES ---
+
+through `@sleet-js/fastnear-explorer-api-client`, the same package the
+engine's web app uses. it fetches the transaction and parses it, and
+the parser **enriches each action in place** with the decoded upload
+and its URL.
+
+the reason it is the explorer's parser and not this skill's own
+decoder: **the explorer's decoder never throws.** a payload that is not
+FastFS borsh decodes to `null` rather than raising, so a transaction
+that holds no FastFS upload is a normal answer here, not a crash. this
+skill's own decoder throws on an unknown variant, because it is built
+for payloads **this** skill wrote, where a throw is a bug.
+
+the explorer client's `api_transactions` has no `sender_account_id`
+parameter, so a hash is fetched by hash alone. the engine skill's
+`tx_status.ts` does pass a signer — that endpoint accepts it and the
+client does not expose it.
+
+---
+
 #### THE BINS
 
 | bin | what it does |
 | --- | --- |
 | `fastfs_upload.ts` | prepare the queue payload for a file — one transaction, or a batch of one per 1 MiB chunk |
 | `fastfs_check.ts` | inspect a file: the size, the mime, whether it fits one call, how many chunks, and every limit it breaks |
+| `fastfs_tx.ts` | read the FastFS upload off a transaction: the path, the mime, the size, the delete, the serving URL, and every limit it breaks |
 | `fastfs_url.ts` | the serving URL and the `fastfs://` URI, for a predecessor, a receiver and a path |
 | `fastfs_status.ts` | poll the serving URL with a cache-busting query, and report when it returns 200 |
 
@@ -327,6 +392,11 @@ override the defaults of `1` and `0`).
 
 `fastfs_url.ts` takes `--predecessor <account_id>` and
 `--relative-path <path>`, and optionally `--receiver`.
+
+`fastfs_tx.ts` takes `--tx-hash <hash>`, and optionally
+`--network mainnet|testnet` and `--with-content`. a bare list of
+hashes works too — `fastfs_tx.ts <hash> <hash>` — because the argument
+parser holds one value per flag.
 
 `fastfs_status.ts` takes `--url <url>`, or the three of
 `--predecessor`, `--receiver` and `--relative-path`, plus `--for
@@ -359,6 +429,12 @@ the serving URL, and the poll for it:
 ```sh
 bun bin/fastfs_url.ts --predecessor alice.near --relative-path picture.png
 bun bin/fastfs_status.ts --predecessor alice.near --relative-path picture.png --for 120
+```
+
+what a signed upload actually put up:
+
+```sh
+bun bin/fastfs_tx.ts --tx-hash 5vUqtNhYchWyrifviVZ9F6k4QprgfW9fjSAtcGMdQyRw
 ```
 
 the queue payload for a human to sign looks like this:
@@ -399,6 +475,11 @@ sibling field. exactly one of `args` and `argsBase64` is set.
   (`fastfs-sub-indexer/src/fastfs.rs`),
   `github.com/fastnear/fastdata-drag-and-drop`
   (`src/hooks/fastfs.js`), and `near.social/standard.md`.
+- `fastfs_tx.ts` reads the transaction through
+  `@sleet-js/fastnear-explorer-api-client` — the same parser the
+  engine's web app uses, and the agreement between that package and
+  the engine's frontend is written down in its
+  `FastFS_DECODER_CONTRACT.md`.
 
 =====================
 <br/>

@@ -32,7 +32,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@huggies/shit-1170-rex-engine-middleman": "^0.0.6"
+    "@huggies/shit-1170-rex-engine-middleman": "^0.0.6",
+    "@sleet-js/fastnear-explorer-api-client": "^0.1.7"
   },
   "devDependencies": {
     "@types/bun": "latest",
