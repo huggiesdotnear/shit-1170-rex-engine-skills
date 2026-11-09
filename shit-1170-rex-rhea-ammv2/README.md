@@ -15,6 +15,7 @@ see [SKILL.md](./SKILL.md) for the overview and the flow.
 bun bin/dex_info.ts [--list-pools --limit 50] [--pool-id <n>]
 bun bin/dex_check.ts --account <account_id> [--pool-id <n> --token-in <t> --token-out <t> --amount <u>] [--token <t>]
 bun bin/balance.ts check --account <account_id> [--pool-id <n>]
+bun bin/positions.ts --pool-id <n> --account <account_id>
 
 bun bin/swap.ts --pool-id <n[,n,...]> --token-in <t[,t,...]> --token-out <t> --amount <unit_amount> [--slippage 0.5]
 bun bin/balance.ts deposit --token <token_id> --amount <unit_amount>
@@ -83,6 +84,23 @@ it.
 - the **withdrawal** is a contract method on the DEX, and its
   `token_id` is the DEX's inner token id for the pool — `"2794"` for
   pool 2794 — so the payload's `contractId` is the DEX
+
+**the deposited balance is NOT the LP position.** the deposited
+balance is tokens parked at the DEX; the LP position is the account's
+share of a pool's reserves. they are separate.
+
+#### THE LP POSITIONS
+
+**there is no view that lists an account's LP positions** on this DEX.
+you must know the pool id, then read `get_pool_shares` for the shares
+and `get_unit_share_token_amounts` for what one share is worth.
+
+```sh
+bun bin/positions.ts --pool-id 0 --account sleet.near
+```
+
+the concentrated-liquidity DEX is different — `dclv2.ref-labs.near`
+has `list_liquidities`, which does list an account's positions.
 
 ---
 

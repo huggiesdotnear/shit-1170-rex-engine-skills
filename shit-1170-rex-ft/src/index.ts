@@ -35,6 +35,11 @@ export * from "./wrap_near";
 // the local account list, read only. no key is ever read or printed.
 export * from "./accounts";
 
+// the token information the intear API adds on top of the chain's own
+// `ft_metadata` — the price, the liquidity, the market cap and the
+// pool the token trades in.
+export * from "./token_info";
+
 export interface SHIT_1170_FT_TRANSFER_REQUEST {
   tokenId: string;
   receiverId: string;

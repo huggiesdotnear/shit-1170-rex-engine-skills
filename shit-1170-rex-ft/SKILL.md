@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-ft
-description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the shit-1170 rex engine — the standard method shapes, the gas and deposit for each call, a local contact list, receiver-existence checks, and NEP-145 token-storage checks. Use this skill whenever the user mentions an FT, fungible token, NEP-141, NEP-145, ft_transfer, ft_transfer_call, ft_balance_of, ft_metadata, ft_total_supply, storage_deposit, storage_balance_of, storage_balance_bounds, storage_withdraw, wNEAR, USDC, USDT, token decimals, the contacts list, or wants to send or transfer tokens to a NEAR account — including checking whether a receiver exists and can hold the token. Also use it whenever a transfer amount must be converted from decimals to the token's raw unit amount. Use it for wrapping and unwrapping NEAR — wrap.near, wNEAR, near_deposit, near_withdraw, converting native NEAR to wNEAR or back. Emit a queue payload for a human to sign; never send it yourself.
+description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the shit-1170 rex engine — the standard method shapes, the gas and deposit for each call, a local contact list, receiver-existence checks, NEP-145 token-storage checks, and token information from the chain and the intear API (price, liquidity, market cap, the pool it trades in). Use this skill whenever the user mentions an FT, fungible token, NEP-141, NEP-145, ft_transfer, ft_transfer_call, ft_balance_of, ft_metadata, ft_total_supply, storage_deposit, storage_balance_of, storage_balance_bounds, storage_withdraw, wNEAR, USDC, USDT, token decimals, token price, token info, the contacts list, or wants to send or transfer tokens to a NEAR account — including checking whether a receiver exists and can hold the token. Also use it whenever a transfer amount must be converted from decimals to the token's raw unit amount, or when the token's price or market cap is wanted. Use it for wrapping and unwrapping NEAR — wrap.near, wNEAR, near_deposit, near_withdraw, converting native NEAR to wNEAR or back. Emit a queue payload for a human to sign; never send it yourself.
 ---
 
 # shit-1170 rex FT
@@ -58,6 +58,55 @@ returns `spec`, `name`, `symbol`, `icon?`, `reference?`,
 **the decimals come from here.** a raw amount is meaningless without
 them. read them with `bin/ft_metadata.ts` and convert the human
 amount with `shit-1170-rex-unit-conversion`.
+
+---
+
+#### THE TOKEN INFO
+
+the chain knows a token's **metadata** — its name, its symbol and its
+decimals. the token says that about itself, so the chain is
+authoritative for it.
+
+the **intear API** knows what the chain does not: a token's **price**,
+its liquidity, its market cap, and the pool it trades in.
+
+`bin/token_info.ts` reads both and labels which is which:
+
+```sh
+bun bin/token_info.ts --token wrap.near
+```
+
+```json
+{
+  "chain": { "wrap.near": { "symbol": "wNEAR", "decimals": 24, ... } },
+  "api": {
+    "tokens": [
+      {
+        "accountId": "wrap.near",
+        "symbol": "wNEAR",
+        "decimals": 24,
+        "priceUsd": "3.6174083912256811248",
+        "liquidityUsd": 3463982.3696652204,
+        "marketCapUsd": 4743205324.43528,
+        "mainPool": "REF-6063"
+      }
+    ],
+    "missing": [],
+    "height": 223715866
+  }
+}
+```
+
+**when the two disagree about the symbol or the decimals, the chain
+wins.** the API's symbol is a label the indexer carries, and the same
+symbol can name different tokens with different decimals — the Rhea
+index alone lists a "USDC" with 6 decimals and another with 18.
+
+**a token in `missing` is not a broken token.** it is one the indexer
+has not seen. the chain's answer still stands.
+
+the API needs no key, and the middleman's logging goes to stderr so
+stdout stays pure JSON.
 
 ### ft_total_supply - VIEW
 
@@ -361,6 +410,7 @@ the whole reference, with the payloads and the conditional rule, is in
 | `ft_check.ts` | receiver existence, contact membership, token storage, decimals |
 | `ft_balance.ts` | one account's balance of one token, with the decimals |
 | `ft_metadata.ts` | a token's metadata, total supply, and storage bounds |
+| `token_info.ts` | a token's info from the chain AND the intear API — the price, the liquidity, the market cap, the pool it trades in |
 | `wrap.ts` | prepare a `near_deposit` or `near_withdraw` queue payload, with the storage registration in the wrap batch |
 | `wrap_check.ts` | an account's native NEAR, wNEAR balance, storage registration on `wrap.near`, and what it can wrap |
 | `contacts.ts` | manage the local contact list |

@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-rhea-ammv2
-description: Prepare Rhea AMM v2 (ref-finance v2) DEX calls with the shit-1170 rex engine — quoting swaps, swapping through pools, moving the deposited balance, and registering storage, with the gas and deposit for each flow. Use this skill whenever the user mentions v2.ref-finance.near, the Rhea AMM, ref-finance, an AMM swap, a simple pool, a stable swap pool, a rated pool, get_return, swap, add_simple_pool, the DEX deposited balance, or the ref-finance treasury — including when they want to swap tokens on the AMM, quote a swap, withdraw from the DEX, or find out which tokens a pool holds. Reads go to the near-kit tool box; writes emit a queue payload for a human to sign; never send it yourself.
+description: Prepare Rhea AMM v2 (ref-finance v2) DEX calls with the shit-1170 rex engine — quoting swaps, swapping through pools, moving the deposited balance, reading an LP position, and registering storage, with the gas and deposit for each flow. Use this skill whenever the user mentions v2.ref-finance.near, the Rhea AMM, ref-finance, an AMM swap, a simple pool, a stable swap pool, a rated pool, get_return, get_pool_shares, swap, add_simple_pool, the DEX deposited balance, an LP position on the AMM, or the ref-finance treasury — including when they want to swap tokens on the AMM, quote a swap, withdraw from the DEX, or find out which tokens a pool holds. Reads go to the near-kit tool box; writes emit a queue payload for a human to sign; never send it yourself.
 ---
 
 # shit-1170 rex Rhea AMM v2
@@ -130,6 +130,23 @@ balance is not involved.
 the DEX keeps a per-account **deposited balance** of every token it
 has seen. `withdraw` pays out of it.
 
+> #### THE DEPOSITED BALANCE IS NOT THE LP POSITION
+>
+> these are two different things, and they are easy to confuse:
+>
+> the **deposited balance** is tokens the account parked at the DEX.
+> `get_deposits` lists them, `withdraw` pays them out, and they are
+> plain token account ids.
+>
+> the **LP position** is the account's share of a pool's reserves. it
+> is **not** deposited tokens, and it is **not** in the deposited
+> balance. it is read with `get_pool_shares` — see the LP POSITIONS
+> section below.
+>
+> `get_deposits` answers with a map of every token the DEX has ever
+> seen for that account, most of them at `"0"`. the non-zero entries
+> are the deposited balance. none of them are LP positions.
+
 the **deposit** is an `ft_transfer_call` on the **token**, with the
 DEX as `receiver_id` and the msg `"Deposit"`. so the payload's
 `contractId` is the TOKEN.
@@ -147,6 +164,36 @@ bun bin/balance.ts withdraw --token-id 2794 --amount 1000000
 `withdraw` sets `unregister` to false, so the position is kept, and
 `skip_unwrap_near` to false, so a wNEAR withdrawal is unwrapped back
 to NEAR.
+
+---
+
+#### THE LP POSITIONS
+
+**there is NO view that lists an account's LP positions.** the AMM v2
+contract has no "my positions" method. to find out what an account
+holds in a pool you must already know the pool id, and then ask:
+
+| method | args | returns |
+| --- | --- | --- |
+| `get_pool_shares` | `{ pool_id, account_id }` | a **bare share string** |
+| `get_pool_shares_batch` | `{ pool_ids, account_id }` | an **array of share strings** |
+| `get_unit_share_token_amounts` | `{ pool_id }` | what **one** share is worth, per token |
+
+the shares alone do not say what they are worth. the token amounts
+behind a position are `get_unit_share_token_amounts` multiplied by the
+shares.
+
+```sh
+bun bin/positions.ts --pool-id 0 --account sleet.near
+```
+
+the bin reads the pool, the shares and the unit share, and answers the
+position's token amounts.
+
+**the concentrated-liquidity DEX is different.** `dclv2.ref-labs.near`
+has `list_liquidities`, which DOES list an account's positions as full
+objects — with the `lpt_id`, the range and the accrued fees. the AMM
+has no equivalent.
 
 ---
 
@@ -171,7 +218,8 @@ they change nothing on the chain.
 | --- | --- |
 | `dex_info.ts` | the DEX's metadata, its pools, or one pool |
 | `dex_check.ts` | the storage, the pool's tokens, the token registration, and a quote |
-| `balance.ts` | an account's deposited balance, its info, and its LP shares |
+| `balance.ts` | an account's deposited balance and its info |
+| `positions.ts` | an account's LP position in one pool — the shares and what they are worth |
 
 `dex_check.ts` is the bin to run **before** anything is queued. it
 answers the three things that make an AMM call fail:
@@ -215,6 +263,7 @@ answers the three things that make an AMM call fail:
 | `dex_info.ts` | the DEX's metadata, its pools, or one pool |
 | `dex_check.ts` | the storage, the pool's tokens, the token registration, and a quote |
 | `balance.ts` | read the deposited balance, or prepare a deposit or withdrawal |
+| `positions.ts` | read an account's LP position in one pool |
 | `swap.ts` | prepare a swap queue payload, with the floor from a live quote |
 | `storage.ts` | prepare a storage registration, or read the storage status |
 

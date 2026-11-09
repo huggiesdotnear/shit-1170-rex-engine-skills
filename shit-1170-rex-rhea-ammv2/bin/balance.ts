@@ -71,11 +71,12 @@ async function main_fun(): Promise<void> {
       shit_1170_rhea_ammv2_account_info_fun(network, dclId, account),
     ]);
 
-    // the account's LP shares in one pool, when asked.
+    // the account's LP shares in one pool, when asked. these are the
+    // LP POSITION, not the deposited balance — the two are separate.
     const poolId = args_number_fun(args, "pool-id");
-    let poolShares: string | null = null;
+    let lpShares: string | null = null;
     if (poolId !== undefined) {
-      poolShares = await shit_1170_rhea_ammv2_pool_shares_fun(
+      lpShares = await shit_1170_rhea_ammv2_pool_shares_fun(
         network,
         dclId,
         poolId,
@@ -96,12 +97,15 @@ async function main_fun(): Promise<void> {
       network,
       account,
       accountInfo: info,
-      // the non-zero part of the deposited balance.
+      // the non-zero part of the deposited balance — tokens parked
+      // at the DEX. this is NOT the LP position.
       depositedBalance: held,
       // how many tokens the DEX holds for this account in total.
       depositedTokenCount: Object.keys(held).length,
       poolId: poolId ?? null,
-      poolShares,
+      // the LP POSITION in that pool — the account's shares, which is
+      // a separate thing from the deposited balance above.
+      lpShares,
     });
     return;
   }

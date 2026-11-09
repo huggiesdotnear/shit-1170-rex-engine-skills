@@ -17,6 +17,7 @@ bun bin/ft_check.ts --token <token_id> --receiver <account_id>
 bun bin/ft_transfer.ts --token <token_id> --receiver <account_id> --amount <unit_amount> [--force]
 bun bin/ft_balance.ts --token <token_id> --account <account_id>
 bun bin/ft_metadata.ts --token <token_id>
+bun bin/token_info.ts --token <token_id[,token_id,...]>
 bun bin/wrap_check.ts --account <account_id>
 bun bin/wrap.ts --direction wrap|unwrap|storage --amount <unit_amount>
 bun bin/contacts.ts list
@@ -53,6 +54,27 @@ the human before adding it.
 
 `ft_metadata.ts` reports the token's real storage minimum, so a
 `storage_deposit` attaches what the token actually wants.
+
+---
+
+#### THE TOKEN INFO
+
+the chain is authoritative for a token's **metadata** — its name, its
+symbol and its decimals. the token says that about itself.
+
+the **intear API** adds what the chain does not know: the price, the
+liquidity, the market cap and the pool the token trades in.
+
+`token_info.ts` reads both and labels which is which:
+
+```sh
+bun bin/token_info.ts --token wrap.near
+```
+
+when the two disagree about the symbol or the decimals, the chain
+wins — the API's symbol is a label, and the same symbol can name
+different tokens with different decimals. a token the API lists under
+`missing` is one the indexer has not seen, not a broken token.
 
 ---
 

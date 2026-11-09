@@ -212,8 +212,36 @@ seen. `withdraw` pays out of it.
 every token the DEX has ever seen for that account, including the
 zero balances.
 
+**the deposited balance is NOT the LP position.** the deposited
+balance is tokens the account parked at the DEX; the LP position is the
+account's share of a pool's reserves. they are separate, and the
+deposited balance map never holds a position.
+
 **a swap does NOT need the deposited balance** — it takes the tokens
 straight from the caller's wallet.
+
+---
+
+#### THE LP POSITIONS
+
+**there is NO view that lists an account's LP positions** on this DEX.
+the contract has no "my positions" method. to find out what an account
+holds in a pool you must already know the pool id.
+
+| method | args | returns |
+| --- | --- | --- |
+| `get_pool_shares` | `{ pool_id, account_id }` | a **bare share string** |
+| `get_pool_shares_batch` | `{ pool_ids, account_id }` | an **array of share strings** |
+| `get_unit_share_token_amounts` | `{ pool_id }` | what **one** share is worth, per token |
+| `get_unit_share_twap_token_amounts` | `{ pool_id }` | the same, time-weighted |
+
+the shares alone do not say what they are worth. the token amounts
+behind a position are the unit share amounts multiplied by the shares.
+
+**the concentrated-liquidity DEX is different** — `dclv2.ref-labs.near`
+has `list_liquidities(account_id, from_index, limit)`, which DOES list
+an account's positions as full objects, with the `lpt_id`, the range
+and the accrued fees. the AMM has no equivalent.
 
 ---
 
