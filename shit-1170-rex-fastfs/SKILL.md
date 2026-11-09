@@ -10,14 +10,14 @@ transaction whose bytes the FastData indexer picks up and serves
 over http.
 
 use the general `shit-1170-rex-engine` skill for the queueing
-mechanics and the architecture. this skill holds the FastFS-specific
-parts.
+mechanics and the architecture:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>.
+this skill holds the FastFS-specific parts.
 
-**the rules that apply here too:** the agent never calls a contract. a
-read goes to the near-kit tool box (`@near-kit-tool-box/fun`); a write
-emits a QUEUE PAYLOAD for the engine to queue for a human to sign.
-never `near.call`, never `generic_contract_call_fun`, never
-`generic_contract_call_wallet`.
+**the rules that apply here too:** the agent never calls a contract — a
+read goes to the near-kit tool box, a write emits a QUEUE PAYLOAD for a
+human to sign. the engine skill states the rule in full:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>.
 
 ---
 

@@ -249,14 +249,9 @@ the bond is forfeited. the period is measured from the claim's
 a permission is written `<proposal kind>:<action>`. the prefix is the
 kind of the **proposal**, not the method called.
 
-the contract matches on four forms:
-
-| form | grants |
-| --- | --- |
-| `<kind>:<action>` | that action on that kind of proposal |
-| `<kind>:*` | every action on that kind of proposal |
-| `*:<action>` | that action on any kind of proposal |
-| `*:*` | everything |
+the contract matches on four forms: `<kind>:<action>` (that action on
+that kind of proposal), `<kind>:*` (every action on that kind), `*:<action>`
+(that action on any kind), and `*:*` (everything).
 
 the kind's label:
 

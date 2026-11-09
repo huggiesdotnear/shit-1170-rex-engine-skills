@@ -46,7 +46,7 @@ ${HOME}/.shit-1170-rex-engine/
 └── tx/                      # the tx explorer skill's sqlite store of transactions read
 ```
 
-set `SHIT_1170_REX_HOME` to use another directory.
+set `SHIT_1170_REX_HOME` to use a different directory.
 
 ## docs
 

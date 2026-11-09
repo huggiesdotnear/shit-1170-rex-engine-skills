@@ -8,11 +8,14 @@ description: "Read NEAR account transaction histories and transaction details wi
 read the chain's transaction history and the transactions themselves.
 
 use the general `shit-1170-rex-engine` skill for the queueing
-mechanics and the architecture. this skill holds the transaction
-reads.
+mechanics and the architecture:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>.
+this skill holds the transaction reads.
 
 **the rules that apply here too:** the agent never calls a contract.
-everything in this skill is a READ. there is nothing to sign here.
+everything in this skill is a READ. there is nothing to sign here. the
+engine skill states the rule in full:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>.
 
 ---
 

@@ -389,7 +389,9 @@ bun ../shit-1170-rex-ft/bin/balances.ts --account alice.near --sources direct,na
 **`near` is native NEAR, not `wrap.near`.** the chain's own token has
 the id `near` and 24 decimals. wNEAR is the NEP-141 contract
 `wrap.near`, and it has 24 decimals too, so the decimals do not tell
-you which one you are looking at — the id does.
+you which one you are looking at — the id does. the FT skill covers the
+token side of this:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-ft/SKILL.md>.
 
 the router takes both. it knows `near` as the chain's own NEAR and
 `wrap.near` as the wrapped contract, and it routes between them. so

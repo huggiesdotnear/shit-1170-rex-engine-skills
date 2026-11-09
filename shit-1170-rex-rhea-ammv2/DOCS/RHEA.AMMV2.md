@@ -182,27 +182,12 @@ it is not.
 
 #### THE POOLS
 
-a pool answers with exactly six keys:
-
-```json
-{
-  "pool_kind": "SIMPLE_POOL",
-  "token_account_ids": ["token.skyward.near", "wrap.near"],
-  "amounts": ["79848426368936655505064", "3373321323850166573713760549"],
-  "total_fee": 30,
-  "shares_total_supply": "1181416561034084281406576522",
-  "amp": 0
-}
-```
-
-the pool kinds seen live:
-
-| kind | what it is |
-| --- | --- |
-| `SIMPLE_POOL` | a constant-product pool |
-| `STABLE_SWAP` | an amplified pool for like assets |
-| `RATED_SWAP` | a pool with a rated token |
-| `DEGEN_SWAP` | a pool with an oracle-priced token |
+a pool answers with exactly six keys: `pool_kind`, `token_account_ids`,
+`amounts`, `total_fee`, `shares_total_supply` and `amp`. the pool
+kinds seen live are `SIMPLE_POOL` (a constant-product pool),
+`STABLE_SWAP` (an amplified pool for like assets), `RATED_SWAP` (a pool
+with a rated token) and `DEGEN_SWAP` (a pool with an oracle-priced
+token).
 
 **the pool id is a NUMBER**, not a composite string. `total_fee` is in
 basis points. `amp` is the amplification factor, and it is `0` on a

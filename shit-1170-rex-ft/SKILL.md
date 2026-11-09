@@ -9,14 +9,14 @@ the NEP-141 / NEP-145 fungible token standard, with the safety checks
 a token transfer needs.
 
 use the general `shit-1170-rex-engine` skill for the queueing
-mechanics and the architecture. this skill holds the token-specific
-parts.
+mechanics and the architecture:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>.
+this skill holds the token-specific parts.
 
-**the rules that apply here too:** the agent never calls a contract. a
-read goes to the near-kit tool box (`@near-kit-tool-box/fun`); a write
-emits a QUEUE PAYLOAD for the engine to queue for a human to sign.
-never `near.call`, never `generic_contract_call_fun`, never
-`generic_contract_call_wallet`.
+**the rules that apply here too:** the agent never calls a contract — a
+read goes to the near-kit tool box, a write emits a QUEUE PAYLOAD for a
+human to sign. the engine skill states the rule in full:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>.
 
 ---
 
@@ -42,7 +42,9 @@ the chain reads go through the near-kit tool box:
 the views that have no dedicated helper) and `near-kit` for the client,
 built with `new Near({ network })` so the default is MAINNET.
 `@near-kit-tool-box/env` defaults to testnet, which is why the skills
-do not use its client directly.
+do not use its client directly. the library's TOOLS.md has the clients
+and where the facts come from:
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/DOCS/TOOLS.md>.
 
 ---
 
@@ -441,14 +443,14 @@ see NATIVE NEAR OR wNEAR in the general skill.
 for turning the coin into the token and back. they are not the
 standard's `ft_transfer`, and they are not a swap.
 
-| intent | method | args | attached deposit | gas |
-| --- | --- | --- | --- | --- |
-| NEAR → wNEAR | `near_deposit` | `{}` | **the amount to wrap** | 30 Tgas |
-| wNEAR → NEAR | `near_withdraw` | `{ "amount": "<unit>" }` | exactly 1 yoctoNEAR | 30 Tgas |
+`near_deposit` takes no arguments — **the attached deposit IS the
+amount**, and it becomes the wNEAR. `near_withdraw` takes
+`{ "amount": "<unit>" }` and attaches exactly 1 yoctoNEAR. the full
+method table is in
+[WRAP.NEAR.md](./DOCS/WRAP.NEAR.md).
 
-**the deposit on `near_deposit` IS the amount** — it is not a fee, it
-becomes the wNEAR. **a wrap is queued as a BATCH, not as a swap**,
-because these are direct calls to the contract rather than a route.
+**a wrap is queued as a BATCH, not as a swap**, because these are direct
+calls to the contract rather than a route.
 
 **the storage registration is CONDITIONAL.** `near_deposit` mints wNEAR
 to the caller, so the account needs NEP-145 storage on `wrap.near` to
@@ -552,7 +554,8 @@ bun bin/wrap.ts --direction wrap --amount 1500000000000000000000000
 ```
 
 the wrap payload is a batch of two calls — the registration, then the
-deposit — and it goes to the general skill's `queue_tx.ts`.
+deposit — and it goes to the general skill's `queue_tx.ts`. see
+WRAPPING AND UNWRAPPING above for what the payload is.
 
 ---
 
