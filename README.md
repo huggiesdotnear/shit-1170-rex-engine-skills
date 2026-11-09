@@ -26,6 +26,8 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
   - [SPUTNIK.DAO.md](./shit-1170-rex-sputnik-dao/DOCS/SPUTNIK.DAO.md) — the full method reference: every view and every call, with the argument shape, the gas and the deposit
 - [shit-1170-rex-rhea-dclv2](./shit-1170-rex-rhea-dclv2/SKILL.md) — Rhea DCL v2 concentrated-liquidity DEX: quoting swaps, adding and removing liquidity, placing limit orders, moving the internal balance, and registering storage
   - [RHEA.DCLV2.md](./shit-1170-rex-rhea-dclv2/DOCS/RHEA.DCLV2.md) — the full method reference: every view and every call, with the argument shape, the gas and the deposit
+- [shit-1170-rex-rhea-ammv2](./shit-1170-rex-rhea-ammv2/SKILL.md) — Rhea AMM v2 (ref-finance v2): quoting and swapping through pools, moving the deposited balance, and registering storage
+  - [RHEA.AMMV2.md](./shit-1170-rex-rhea-ammv2/DOCS/RHEA.AMMV2.md) — the full method reference: every view and every call, with the argument shape, the gas and the deposit
 - [shit-1170-rex-hello-sleet-near](./shit-1170-rex-hello-sleet-near/SKILL.md) — the hello.sleet.near greeting contract
 - [shit-1170-rex-fastfs](./shit-1170-rex-fastfs/SKILL.md) — FastFS file uploads: the borsh payload, the chunking rule, the limits, and the serving URL
 - [shit-1170-rex-unit-conversion](./shit-1170-rex-unit-conversion/SKILL.md) — human amounts to chain units, using the token's real decimals
