@@ -468,18 +468,18 @@ sibling field. exactly one of `args` and `argsBase64` is set.
 #### MORE
 
 - the engine skill for the queueing mechanics:
-  [shit-1170-rex-engine](../shit-1170-rex-engine/SKILL.md)
-- the FastFS facts come from `hackmd.io/@fastnear/fastfs-docs`,
-  `github.com/fastnear/fastfs-server`,
-  `github.com/fastnear/fastdata-indexer`
+  <https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>
+- the FastFS facts come from <https://hackmd.io/@fastnear/fastfs-docs>,
+  <https://github.com/fastnear/fastfs-server>,
+  <https://github.com/fastnear/fastdata-indexer>
   (`fastfs-sub-indexer/src/fastfs.rs`),
-  `github.com/fastnear/fastdata-drag-and-drop`
-  (`src/hooks/fastfs.js`), and `near.social/standard.md`.
+  <https://github.com/fastnear/fastdata-drag-and-drop>
+  (`src/hooks/fastfs.js`), and <https://near.social/standard.md>.
 - `fastfs_tx.ts` reads the transaction through
   `@sleet-js/fastnear-explorer-api-client` — the same parser the
   engine's web app uses, and the agreement between that package and
-  the engine's frontend is written down in its
-  `FastFS_DECODER_CONTRACT.md`.
+  the engine's frontend is written down in
+  <https://github.com/sleet-js/fastnear-explorer-api-client/blob/main/FastFS_DECODER_CONTRACT.md>.
 
 =====================
 <br/>

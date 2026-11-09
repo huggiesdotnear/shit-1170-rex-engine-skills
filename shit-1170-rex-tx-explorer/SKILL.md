@@ -220,8 +220,9 @@ transaction did what they meant.
 
 - the library's [TOOLS.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/DOCS/TOOLS.md)
   — where the facts come from
-- the engine skill's [SKILL.md](../shit-1170-rex-engine/SKILL.md) — the
-  queueing mechanics
+- the engine skill's
+  [SKILL.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md)
+  — the queueing mechanics
 
 =====================
 <br/>

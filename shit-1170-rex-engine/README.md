@@ -11,7 +11,8 @@ an agent uses this to:
 - sync a local queue record with the server after a human sends it
 
 the token reads — holders, balances, token metadata — live in the
-[shit-1170-rex-ft](../shit-1170-rex-ft/SKILL.md) skill.
+[shit-1170-rex-ft](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-ft/SKILL.md)
+skill.
 
 see [SKILL.md](./SKILL.md) for the workflow and the bins.
 

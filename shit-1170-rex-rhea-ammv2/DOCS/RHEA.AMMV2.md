@@ -78,6 +78,13 @@ a call on the DEX. the payload's `contractId` is the **DEX**.
 so the engine's default applies — 30 Tgas, the middleman's
 `DEFAULT_GAS`.
 
+**the AMM v2 storage methods are calls on the DEX contract itself**,
+so their gas and deposit are the DEX's own — 30 Tgas and 0.00125 NEAR.
+they are not the NEP-145 token-standard numbers, and not the same as the
+DCL v2 DEX's storage methods, which take 300 Tgas and 0.5 NEAR. a
+token's own `storage_deposit`, where the deposit comes from
+`storage_balance_bounds.min`, is in the `shit-1170-rex-ft` skill.
+
 ### swap
 
 ```json

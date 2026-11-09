@@ -37,10 +37,13 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 
 ```text
 ${HOME}/.shit-1170-rex-engine/
-├── accounts/     # one private api key file per account
-├── contacts.json # the ft skill's contact list
-├── queue/        # a local copy of every queued batch and swap
-└── tx/           # the tx explorer skill's sqlite store of transactions read
+├── accounts/                # one private api key file per account
+├── contacts.json            # the ft skill's contact list
+├── queue/                   # a local copy of every queued batch and swap
+│   ├── index.json           # the list of every local record
+│   ├── tx/<queue_id>.json   # one local copy per queued batch
+│   └── swap/<swap_id>.json  # one local copy per queued swap
+└── tx/                      # the tx explorer skill's sqlite store of transactions read
 ```
 
 set `SHIT_1170_REX_HOME` to use another directory.

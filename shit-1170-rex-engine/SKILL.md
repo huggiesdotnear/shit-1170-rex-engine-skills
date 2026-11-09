@@ -249,7 +249,7 @@ the `shit-1170-rex-fastfs` skill has the payload, the borsh schema, the
 chunking rule and the limits.
 
 `gas` and `deposit` are raw digit strings here: gas units and
-yoctoNEAR. the web app's `shared/gas_deposit.ts` also accepts
+yoctoNEAR. the web app's `gas_deposit.ts` also accepts
 near-kit's human forms — `"30 Tgas"`, `"0.00125 NEAR"`, `"1 yocto"` —
 and converts them, so a hand-written payload may use either. raw digits
 are preferred, because there is no ambiguity about what they mean.
@@ -374,6 +374,8 @@ only one of them is what they actually hold. a swap whose input token
 they do not have is a swap that cannot execute.
 
 ```sh
+# the balances bin lives in the FT skill:
+# https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-ft/SKILL.md
 bun ../shit-1170-rex-ft/bin/balances.ts --account alice.near --sources direct,native
 ```
 
@@ -708,28 +710,13 @@ records make that visible without a database.
 #### THE WEBSITE'S DATA
 
 the engine's pages read the Intear API and the contracts directly. the
-bins that give the same answers live in the **FT** skill now — it owns
-the token reads:
+bins that give the same answers live in the **FT** skill — it owns the
+token reads: balances, holders and token info. use that skill's bins, not
+this one's.
 
-```sh
-bun ../shit-1170-rex-ft/bin/balances.ts --account alice.near --sources direct,native
-bun ../shit-1170-rex-ft/bin/holders.ts --token shit-1170.meme-cooking.near --limit 100
-bun ../shit-1170-rex-ft/bin/token_info.ts --token wrap.near,usdt.tether-token.near
-```
-
-`balances.ts` reads direct token balances, native NEAR, and the Rhea AMM
-deposits (`--sources rhea`). it does NOT read the Rhea DCL or INTEAR
-internal balances — those need the contract-specific skills.
-
-it is the read that picks a swap's input token. `--sources direct,native`
-tells you whether the account holds native NEAR, wNEAR, or both.
-
-`holders.ts` is the indexed holder list, paged with the cursor the
-server gives.
-
-`token_info.ts` reads name, symbol, decimals, price, reputation,
-holder count, liquidity, market cap, and total supply — from the
-chain AND the Intear API, labelled as to which is which.
+see
+<https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-ft/SKILL.md>
+for what each one takes and what it prints.
 
 ---
 

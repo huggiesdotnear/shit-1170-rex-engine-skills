@@ -13,7 +13,7 @@ through the serving URL.
 
 - the skill: [SKILL.md](./SKILL.md)
 - the engine skill, for the queueing mechanics:
-  [shit-1170-rex-engine](../shit-1170-rex-engine/SKILL.md)
+  [shit-1170-rex-engine](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md)
 
 ## the bins
 
@@ -155,6 +155,9 @@ the facts come from the primary sources, not from a summary of them:
   (`src/hooks/fastfs.js`) — the reference frontend's schema
 - `near.social/standard.md` — the upload convention, the gas `1`, and
   the failed receipt
+- `github.com/sleet-js/fastnear-explorer-api-client`
+  (`FastFS_DECODER_CONTRACT.md`) — the decoder contract that package
+  and the engine's frontend both implement
 - the mainnet transaction `5vUqtNhYchWyrifviVZ9F6k4QprgfW9fjSAtcGMdQyRw`
   — the wire format, byte for byte
 

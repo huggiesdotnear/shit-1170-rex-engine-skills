@@ -4,7 +4,7 @@ the sources and the clients the shit-1170 rex skills use.
 
 this file is scoped to the whole library. the engine skill's own routes
 and data model are in its
-[ENGINE.md](../shit-1170-rex-engine/DOCS/ENGINE.md).
+[ENGINE.md](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/DOCS/ENGINE.md).
 
 ---
 

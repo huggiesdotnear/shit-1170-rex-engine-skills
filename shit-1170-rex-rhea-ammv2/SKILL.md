@@ -250,9 +250,9 @@ answers the three things that make an AMM call fail:
    sends nothing.
 6. **queue it** — pass the payload to the general skill's
    `queue_tx.ts`, and report the queue id and the link to sign it.
-7. **wait, then follow it** — `bin/watch_queue.ts --queue <id>
-   --until sent`, then `bin/queue_sent.ts --from-server` for the hash
-   and `bin/tx_status.ts` for the outcome.
+7. **wait, then follow it** — the general skill's `watch_queue.ts
+   --queue <id> --until sent`, then `queue_sent.ts --from-server` for
+   the hash and `tx_status.ts` for the outcome.
 
 ---
 

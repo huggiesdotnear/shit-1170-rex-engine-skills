@@ -12,7 +12,7 @@ logs.
 
 - the skill: [SKILL.md](./SKILL.md)
 - the engine skill, for the queueing mechanics:
-  [shit-1170-rex-engine](../shit-1170-rex-engine/SKILL.md)
+  [shit-1170-rex-engine](https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md)
 
 ## the bins
 

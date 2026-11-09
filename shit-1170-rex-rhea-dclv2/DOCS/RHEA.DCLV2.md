@@ -79,6 +79,13 @@ a call on the DEX itself. the payload's `contractId` is the **DEX**.
 | `storage_withdraw` | `{}` | 300 Tgas | 1 yoctoNEAR |
 | `storage_unregister` | `{}` | 300 Tgas | 1 yoctoNEAR |
 
+**these storage methods are calls on the DEX contract itself**, so their
+gas and deposit are the DEX's own — 300 Tgas and 0.5 NEAR. they are not
+the NEP-145 token-standard numbers, and not the same as the AMM v2
+DEX's storage methods. a token's own `storage_deposit`, where the
+deposit comes from `storage_balance_bounds.min`, is in the
+`shit-1170-rex-ft` skill.
+
 ### add_liquidity
 
 ```json

@@ -88,7 +88,7 @@ is the contract's own argument object — for `set_greeting` it is
 strings — gas units and yoctoNEAR. `3000000000000` is 3 Tgas, and
 `0` here because the contract takes no deposit.
 
-the web app's `shared/gas_deposit.ts` also accepts near-kit's human
+the web app's `gas_deposit.ts` also accepts near-kit's human
 forms (`"3 Tgas"`, `"1 yocto"`) and converts them, so a hand-written
 payload may use either. raw digits are preferred, because there is no
 ambiguity about what they mean.
@@ -148,7 +148,9 @@ bun bin/greeting.ts set --greeting "Hello from sleet"
 ```
 
 ```sh
-bun ../../shit-1170-rex-engine/bin/queue_tx.ts \
+# the queueing bins live in the general shit-1170-rex-engine skill:
+# https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md
+bun ../shit-1170-rex-engine/bin/queue_tx.ts \
   --transactions '[{"contractId":"hello.sleet.near","method":"set_greeting","args":{"greeting":"Hello from sleet"},"gas":"3000000000000","deposit":"0"}]' \
   --what "Set the greeting to Hello from sleet"
 ```

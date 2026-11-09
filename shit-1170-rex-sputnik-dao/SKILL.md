@@ -317,9 +317,9 @@ bun bin/bounty.ts --dao <dao> --bounty-id 0 --action claim \
    `bin/bounty.ts`. these print the queue payload and send nothing.
 5. **queue it** — pass the payload to the general skill's
    `queue_tx.ts`, and report the queue id and the link to sign it.
-6. **wait, then follow it** — `bin/watch_queue.ts --queue <id>
-   --until sent`, then `bin/queue_sent.ts --from-server` for the hash
-   and `bin/tx_status.ts` for the outcome.
+6. **wait, then follow it** — the general skill's `watch_queue.ts
+   --queue <id> --until sent`, then `queue_sent.ts --from-server` for
+   the hash and `tx_status.ts` for the outcome.
 
 ---
 

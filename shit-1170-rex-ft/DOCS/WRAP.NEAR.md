@@ -303,8 +303,9 @@ read off the deployed contract on mainnet:
 | `near_deposit` with no deposit | panics `Requires positive attached deposit` |
 | `near_withdraw` with no amount | panics `missing field 'amount'` |
 
-the methods exist on the deployed contract, checked with
-`bin/check_contract.ts --id wrap.near --methods near_deposit,near_withdraw,storage_deposit,storage_minimum_balance,storage_balance_bounds`.
+the methods exist on the deployed contract, checked with the general
+`shit-1170-rex-engine` skill's `check_contract.ts`:
+`check_contract.ts --id wrap.near --methods near_deposit,near_withdraw,storage_deposit,storage_minimum_balance,storage_balance_bounds`.
 
 `near_deposit`'s deposit requirement and `near_withdraw`'s argument
 shape come from the tool box's fun helpers, which build and send the

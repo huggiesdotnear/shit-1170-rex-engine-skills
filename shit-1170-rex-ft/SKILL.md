@@ -219,6 +219,13 @@ no arguments.
   some tokens require more; check `storage_balance_bounds` and use the
   token's own `min`
 
+**this is the token's own `storage_deposit`**, so the deposit is the
+token's `storage_balance_bounds.min`. a DEX has storage methods of its
+own, and they are not these numbers — the Rhea AMM v2 DEX's is 30 Tgas
+and 0.00125 NEAR, and the Rhea DCL v2 DEX's is 300 Tgas and 0.5 NEAR.
+those are in the `shit-1170-rex-rhea-ammv2` and
+`shit-1170-rex-rhea-dclv2` skills.
+
 ### storage_withdraw - CALL
 
 no arguments.
@@ -289,7 +296,7 @@ action. the engine queues it and a human signs it.
 `contractId` is the token contract's account id. `method` is the
 method name, exactly as the contract spells it. `args` is the
 contract's own argument object. `gas` and `deposit` are raw digit
-strings — gas units and yoctoNEAR. the web app's `shared/gas_deposit.ts`
+strings — gas units and yoctoNEAR. the web app's `gas_deposit.ts`
 also accepts near-kit's human forms (`"30 Tgas"`, `"0.00125 NEAR"`,
 `"1 yocto"`) and converts them, so a hand-written payload may use
 either. raw digits are preferred, because there is no ambiguity about
@@ -298,7 +305,8 @@ what they mean.
 these payloads are built with the middleman's `queue_call_fun`, which
 makes a single call with sane defaults (gas `30000000000000`, deposit
 `0`) and refuses a payload it cannot trust: an empty `contractId` or
-`method`, an `args` that is not a plain object, or a `gas`/`deposit`
+`method`, an `args` that is not a plain object, an `args_base64` that is
+not base64, a payload carrying both kinds of args, or a `gas`/`deposit`
 that is not a raw digit string. this skill wraps it in named helpers —
 `shit_1170_ft_transfer_queue_call_fun`,
 `shit_1170_ft_transfer_call_queue_call_fun`,
