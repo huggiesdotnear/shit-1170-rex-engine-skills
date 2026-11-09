@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-hello-sleet-near
-description: Read the hello.sleet.near greeting contract on mainnet and testnet with the shit-1170 rex engine — the deployed contract ids, each method's call type, exact argument shape, and gas and deposit. Use this skill whenever the user mentions hello.sleet.near, hello.sleet.testnet, the sleet greeting contract, get_greeting, set_greeting, or wants to read the current greeting or set a new one — including when they want to know what arguments a greeting contract method takes, or need the greeting contract's id for the right network. Also use it when a queued transaction calls the greeting contract and the agent must check the method name, the arguments, the gas, or the deposit. Emit a queue payload for a human to sign; never send it yourself.
+description: "Read the hello.sleet.near greeting contract on mainnet and testnet with the shit-1170 rex engine — the deployed contract ids, each method's call type, exact argument shape, and gas and deposit. Use this skill whenever the user mentions hello.sleet.near, hello.sleet.testnet, the sleet greeting contract, get_greeting, set_greeting, or wants to read the current greeting or set a new one — including when they want to know what arguments a greeting contract method takes, or need the greeting contract's id for the right network. Also use it when a queued transaction calls the greeting contract and the agent must check the method name, the arguments, the gas, or the deposit. Emit a queue payload for a human to sign; never send it yourself."
 ---
 
 # shit-1170 rex hello.sleet.near
@@ -163,6 +163,13 @@ bun ../shit-1170-rex-engine/bin/queue_tx.ts \
 - a batch that also does other things: the general skill's
   `queue_tx.ts` takes a list of calls, and this skill only describes
   the greeting one
+
+---
+
+#### MORE
+
+- the engine skill for the queueing mechanics:
+  <https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>
 
 =====================
 <br/>

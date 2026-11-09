@@ -37,7 +37,7 @@
   "dependencies": {
     "@huggies/shit-1170-rex-engine-middleman": "^0.0.6",
     "@near-kit-tool-box/env": "0.3.0",
-    "@near-kit-tool-box/fun": "0.3.0",
+    "@near-kit-tool-box/fun": "0.3.1",
     "near-kit": "^0.20.2"
   },
   "devDependencies": {

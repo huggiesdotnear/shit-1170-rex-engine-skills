@@ -34,6 +34,16 @@ bun bin/sync_queue.ts all
 
 the bins print JSON on stdout and JSON errors on stderr.
 
+#### TESTS
+
+```sh
+# the bun bin and the python bin must agree, on the math and on the errors
+python3 evals/difftest.py .
+```
+
+`evals/evals.json` holds the test prompts and the assertions they are
+graded on.
+
 =====================
 <br/>
 copyright 2026 by sleet.near

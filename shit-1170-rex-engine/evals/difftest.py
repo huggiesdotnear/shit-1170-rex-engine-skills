@@ -59,6 +59,8 @@ def main() -> int:
     skill_dir = Path(sys.argv[1]).resolve()
 
     # the contacts and the token bins live in the ft skill, not here.
+    # those tests are skipped when the ft skill is not beside this one,
+    # so this skill's own tests still run on its own.
     ft_dir = skill_dir.parent / "shit-1170-rex-ft"
 
     with tempfile.TemporaryDirectory() as temp:

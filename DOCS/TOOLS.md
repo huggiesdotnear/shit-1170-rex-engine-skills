@@ -70,7 +70,7 @@ bunx skills add huggiesdotnear/shit-1170-rex-engine-skills
 
 the `package.json` in each skill folder names the package the folder
 *would* have if it were published — `@huggies/shit-1170-rex-engine-skill`
-and its three siblings. those names are internal. nothing is on the
+and its eight siblings. those names are internal. nothing is on the
 npm registry, and nothing needs to be: the installer takes the repo.
 
 the middleman is a different thing — it IS published, because code

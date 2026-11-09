@@ -161,6 +161,11 @@ the facts come from the primary sources, not from a summary of them:
 - the mainnet transaction `5vUqtNhYchWyrifviVZ9F6k4QprgfW9fjSAtcGMdQyRw`
   — the wire format, byte for byte
 
+#### TESTS
+
+`evals/evals.json` holds the test prompts and the assertions they are
+graded on.
+
 =====================
 <br/>
 copyright 2026 by sleet.near

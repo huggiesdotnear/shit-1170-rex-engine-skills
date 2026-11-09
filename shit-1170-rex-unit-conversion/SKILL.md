@@ -1,11 +1,11 @@
 ---
 name: shit-1170-rex-unit-conversion
-description: Convert and VERIFY NEAR token amounts between human decimals ("1.5") and the chain's unit amount ("1500000000000000000000000"), using the token's real decimals fetched from the Intear API rather than assumed. Use this skill whenever the user mentions unit conversion, decimal places, token decimals, amount conversion, yoctoNEAR, the smallest unit of a token, or asks what amount to put in an ft_transfer - including when they are preparing, sending or double checking a NEAR transfer, swap, or DEX trade and the amount must be exactly right. Use it even when the amount has already been worked out and only needs verifying, and even when the user does not ask a question at all - if an amount is going to a transfer, a router or a contract argument, look the decimals up and check the number, because a wrong amount succeeds on chain and fails silently. This is the agent friendly version of the shit-1170 unit conversion page.
+description: "Convert and VERIFY NEAR token amounts between human decimals (\"1.5\") and the chain's unit amount (\"1500000000000000000000000\"), using the token's real decimals fetched from the Intear API rather than assumed. Use this skill whenever the user mentions unit conversion, decimal places, token decimals, amount conversion, yoctoNEAR, the smallest unit of a token, or asks what amount to put in an ft_transfer — including when they are preparing, sending or double checking a NEAR transfer, swap, or DEX trade and the amount must be exactly right. Use it even when the amount has already been worked out and only needs verifying, and even when the user does not ask a question at all — if an amount is going to a transfer, a router or a contract argument, look the decimals up and check the number, because a wrong amount succeeds on chain and fails silently. This is the agent friendly version of the shit-1170 unit conversion page."
 ---
 
 # shit-1170 rex unit conversion
 
-Turn a human amount into the chain's unit amount, and back, using the
+turn a human amount into the chain's unit amount, and back, using the
 token's real decimals.
 
 - live page: <https://shit-1170.com/unit-conversion.html>
@@ -20,15 +20,15 @@ A NEAR token amount has two forms, and they are not interchangeable:
 - the **decimal amount** a person reads — `1.5`
 - the **unit amount** the chain trades — `1500000000000000000000000`
 
-The chain only knows the unit amount. `ft_transfer` takes a unit
-amount. A router takes a unit amount. An amount that is wrong by a
+the chain only knows the unit amount. `ft_transfer` takes a unit
+amount. a router takes a unit amount. an amount that is wrong by a
 factor of `10**decimals` is not a rounding error — it is a
 24-decimal token paying out a million times too much, or a dust
 amount that transfers nothing at all.
 
-Neither failure announces itself. An amount that is too large pays out
+neither failure announces itself. an amount that is too large pays out
 too much and the transaction succeeds; an amount that is too small is
-dust and the transaction succeeds and moves nothing. So this skill is
+dust and the transaction succeeds and moves nothing. so this skill is
 worth using as a **check** on a number that was worked out elsewhere,
 not only as a converter — the arithmetic is easy, the assumption about
 the decimals is the danger.
@@ -37,11 +37,11 @@ the decimals is the danger.
 
 #### THE BIN
 
-The bin takes a contract address and ONE amount, and answers with the
+the bin takes a contract address and ONE amount, and answers with the
 amount in both forms. JSON on stdout, errors as JSON on stderr with a
 non-zero exit code.
 
-There are two bins, and they are the same conversion. Use whichever
+there are two bins, and they are the same conversion. use whichever
 one fits the environment.
 
 ```sh
@@ -52,8 +52,8 @@ bun bin/unit_conversion.ts --ca <contract_address> (--decimal <amount> | --unit 
 python3 bin/unit_conversion.py --ca <contract_address> (--decimal <amount> | --unit <amount>) [--decimals n]
 ```
 
-The python one uses only the standard library, so it runs anywhere
-python runs. The two produce identical output — the same flags, the
+the python one uses only the standard library, so it runs anywhere
+python runs. the two produce identical output — the same flags, the
 same JSON, the same errors — so an agent can reach for either without
 thinking about which environment it is in.
 
@@ -75,7 +75,7 @@ python3 bin/unit_conversion.py --ca wrap.near --decimal 1.5
 python3 bin/unit_conversion.py --ca usdt.tether-token.near --decimal 0.5
 ```
 
-The answer:
+the answer:
 
 ```json
 {
@@ -99,7 +99,7 @@ The answer:
   from Intear), `local` (a known constant of the chain's own token),
   or `given` (the caller passed `--decimals`)
 
-Report the source when you report the decimals. "the api says 24" and
+report the source when you report the decimals. "the api says 24" and
 "NEAR always has 24" are different claims, and an agent that cannot
 tell them apart cannot tell which one it is relying on.
 
@@ -107,35 +107,35 @@ tell them apart cannot tell which one it is relying on.
 
 #### WHY THE SIDE IS EXPLICIT
 
-`--decimal` and `--unit` say which side the amount is on. There is no
+`--decimal` and `--unit` say which side the amount is on. there is no
 heuristic and no guessing.
 
-The reason is the failure mode. A bin that guesses from the string
+the reason is the failure mode. a bin that guesses from the string
 picks the wrong side for a plain whole number — `1000` is a
 legitimate decimal amount and a legitimate unit amount — and the
-answer then differs by a factor of `10**decimals`. The number still
-looks plausible. The transfer still goes through. It just moves the
+answer then differs by a factor of `10**decimals`. the number still
+looks plausible. the transfer still goes through. it just moves the
 wrong amount of money.
 
-Saying which side it is costs one flag and removes that failure
-entirely. When an amount comes from a conversation and the side is
+saying which side it is costs one flag and removes that failure
+entirely. when an amount comes from a conversation and the side is
 genuinely ambiguous, ask — do not guess.
 
 ---
 
 #### THE DECIMALS
 
-The decimals come from the Intear API (`https://api.intea.rs`) through
-`@sleet-js/middleman-intear-api`, fetched per token. They are not
+the decimals come from the Intear API (`https://api.intea.rs`) through
+`@sleet-js/middleman-intear-api`, fetched per token. they are not
 hard-coded here, because there are thousands of tokens and a list
 would go stale the moment a new one is listed.
 
 - `--decimals n` skips the api call when the caller already knows
-  them. It must still be the token's real decimals or the answer is
+  them. it must still be the token's real decimals or the answer is
   wrong — the api is the default source.
 - `near` is described locally at 24 decimals, because the Intear token
   registry has no `near` entry and the api can never answer for it.
-  `wrap.near` (wNEAR) trades 1:1 with NEAR and has the same 24. The
+  `wrap.near` (wNEAR) trades 1:1 with NEAR and has the same 24. the
   answer says `decimals_source: "local"` for it, so the difference
   between "the registry says" and "the protocol says" stays visible.
   Use `--ca near` for native NEAR and `--ca wrap.near` for wNEAR —
@@ -148,18 +148,18 @@ would go stale the moment a new one is listed.
 
 #### THE RULES THE MATH FOLLOWS
 
-These are the same rules the shit-1170 page runs, so an agent and the
+these are the same rules the shit-1170 page runs, so an agent and the
 page never disagree about what an amount is.
 
 - **Truncate, never round.** A fraction longer than the token's
-  decimals is cut, not rounded up. The unit amount is what the chain
+  decimals is cut, not rounded up. the unit amount is what the chain
   will trade, so it must never be MORE than the caller asked for.
   Rounding up would spend more than they typed.
 - **Exact integers, not floats.** A 24-decimal amount is far beyond
   JavaScript's exact integer range, so a float round trip loses the
-  low digits of a large balance. The math is done on `BigInt`.
+  low digits of a large balance. the math is done on `BigInt`.
 - **A unit amount is a plain whole number.** No dot, no sign, no
-  exponent. Anything else is rejected rather than parsed loosely.
+  exponent. anything else is rejected rather than parsed loosely.
 - **A decimal amount is plain digits and at most one dot.** No
   exponent, no sign, no thousands separators.
 - **Trailing zeros are trimmed for reading, kept for the chain.**
@@ -181,7 +181,7 @@ page never disagree about what an amount is.
 - the user asks what the decimals of a token are
 - the user wants to confirm a pasted contract address is a real token
 
-The last two are worth doing before a transfer: a wrong contract
+the last two are worth doing before a transfer: a wrong contract
 address and a wrong amount fail the same way, quietly, if the address
 happens to be a real contract with different decimals.
 
@@ -189,7 +189,7 @@ happens to be a real contract with different decimals.
 
 #### READING THE RESULT IN A SCRIPT
 
-The output is JSON on stdout, so a shell pipeline can read it without
+the output is JSON on stdout, so a shell pipeline can read it without
 parsing prose:
 
 ```sh
@@ -197,7 +197,7 @@ UNIT=$(bun bin/unit_conversion.ts --ca wrap.near --decimal 1.5 2>/dev/null | gre
 UNIT=$(python3 bin/unit_conversion.py --ca wrap.near --decimal 1.5 2>/dev/null | grep '"unit"' | cut -d'"' -f4)
 ```
 
-stdout is pure JSON — the api's log frame is kept off it entirely. To
+stdout is pure JSON — the api's log frame is kept off it entirely. to
 see the api's request and response, set `UNIT_CONVERSION_LOG=1` on the
 bun bin.
 
@@ -205,8 +205,8 @@ bun bin.
 
 #### WHEN THE TOKEN IS NOT IN THE REGISTRY
 
-Some tokens are real, on chain, and simply not listed in the Intear
-registry. For those, pass the decimals you already know — from the
+some tokens are real, on chain, and simply not listed in the Intear
+registry. for those, pass the decimals you already know — from the
 contract's `ft_metadata`, from an explorer, from the token's docs:
 
 ```sh
@@ -214,15 +214,15 @@ bun bin/unit_conversion.ts --ca some.token.near --decimal 1.5 --decimals 18
 python3 bin/unit_conversion.py --ca some.token.near --decimal 1.5 --decimals 18
 ```
 
-Read the decimals from the token's own `ft_metadata` view when you
-can. It is the token itself that decides, not any registry.
+read the decimals from the token's own `ft_metadata` view when you
+can. it is the token itself that decides, not any registry.
 
 ---
 
 #### LIBRARY USE
 
-The same math is importable, for when a script needs the conversion
-inline rather than through the bin. The skill is not published to npm
+the same math is importable, for when a script needs the conversion
+inline rather than through the bin. the skill is not published to npm
 — it is installed from the repo — so the import is a relative path into
 the skill folder:
 
@@ -238,11 +238,18 @@ const info = await unit_conversion_token_info_fun("wrap.near");
 const unit = human_to_unit_fun("1.5", info.decimals);
 ```
 
-The `package.json` in this folder names the package the skill *would*
-have if it were published. That name is internal — nothing in this
+the `package.json` in this folder names the package the skill *would*
+have if it were published. that name is internal — nothing in this
 library is on the npm registry.
 
 ---
+
+#### MORE
+
+- the engine skill for the queueing mechanics:
+  <https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/shit-1170-rex-engine/SKILL.md>
+- the library's TOOLS.md, for where the facts come from:
+  <https://github.com/huggiesdotnear/shit-1170-rex-engine-skills/blob/main/DOCS/TOOLS.md>
 
 =====================
 <br/>
