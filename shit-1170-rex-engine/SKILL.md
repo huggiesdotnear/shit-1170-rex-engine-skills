@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-engine
-description: "Propose, verify, queue, and track NEAR transactions and swaps with the shit-1170 rex engine. Use this skill whenever the user mentions shit-1170, shit-1170-rex-engine, the rex engine, a tx queue, a swap queue, queuing a transaction, proposing a transaction for signing, checking a queued transaction's outcome, or using @huggies/shit-1170-rex-engine-middleman — including when the user wants the agent to prepare NEAR contract calls without sending them. Also use it for the rex engine's website data: token holders, direct balances, internal DEX balances, token metadata, or account balances, and for waiting on the live feed when a human is about to sign — the transaction hash comes from the engine, so the human never has to paste one. Queue work for a human to sign; do not sign or send transactions yourself."
+description: "Propose, verify, queue, and track NEAR transactions and swaps with the shit-1170 rex engine. Use this skill whenever the user mentions shit-1170, shit-1170-rex-engine, the rex engine, a tx queue, a swap queue, queuing a transaction, proposing a transaction for signing, checking a queued transaction's outcome, or using @huggies/shit-1170-rex-engine-middleman — including when the user wants the agent to prepare NEAR contract calls without sending them. Also use it for waiting on the live feed when a human is about to sign — the transaction hash comes from the engine, so the human never has to paste one. The token reads — holders, balances, token metadata — live in the shit-1170-rex-ft skill. Queue work for a human to sign; do not sign or send transactions yourself."
 ---
 
 # shit-1170 rex engine
@@ -69,8 +69,8 @@ role.
    human amounts against the token's real decimals.
 4. **check the account and receiver** — `bin/check_contract.ts` and
    `bin/check_receiver.ts` verify that an account exists on chain. for
-   a swap, `bin/balances.ts` says what the account actually holds, so
-   the input token is one they have.
+   a swap, the **FT** skill's `balances.ts` says what the account
+   actually holds, so the input token is one they have.
 5. **show the human a plain-language summary** — contract, method,
    arguments, gas, deposit, and what it will do.
 6. **queue the batch** — `bin/queue_tx.ts` or `bin/queue_swap.ts`.
@@ -111,7 +111,7 @@ records the call. verifying it is the agent's job.
 | receiver exists | `check_receiver.ts` | tokens go nowhere |
 | receiver has token storage | `storage_balance_of` | the transfer succeeds and the tokens vanish |
 | amount | `shit-1170-rex-unit-conversion` | a million times too much, or dust |
-| the account holds the input token | `balances.ts` | the swap is queued against money that is not there |
+| the account holds the input token | the FT skill's `balances.ts` | the swap is queued against money that is not there |
 | intent | the human | the right call doing the wrong thing |
 
 the last one is the one no tool can do. a technically correct call can
@@ -156,9 +156,6 @@ the `kind` column says where the answer comes from:
 | `tx_status.ts` | chain VIEW | read a transaction's receipt from the FastNear transactions API |
 | `check_contract.ts` | chain VIEW | verify an account and probe its methods on chain |
 | `check_receiver.ts` | chain VIEW | verify a receiver account exists on chain |
-| `balances.ts` | engine | read direct, native, and Rhea balances like the website |
-| `holders.ts` | engine | read a token's holders like the website |
-| `token_info.ts` | engine | read token metadata like the website |
 
 **this skill is the engine's own surface.** the token and contract
 skills have their own bins, and they are the better ones — the **FT**
@@ -377,7 +374,7 @@ only one of them is what they actually hold. a swap whose input token
 they do not have is a swap that cannot execute.
 
 ```sh
-bun bin/balances.ts --account alice.near --sources direct,native
+bun ../shit-1170-rex-ft/bin/balances.ts --account alice.near --sources direct,native
 ```
 
 | the account holds | the swap's `tokenIn` is |
@@ -710,13 +707,14 @@ records make that visible without a database.
 
 #### THE WEBSITE'S DATA
 
-the engine's pages read the Intear API and the contracts directly. use
-the bins to get the same answers an agent or a human sees.
+the engine's pages read the Intear API and the contracts directly. the
+bins that give the same answers live in the **FT** skill now — it owns
+the token reads:
 
 ```sh
-bun bin/balances.ts --account alice.near --sources direct,native
-bun bin/holders.ts --token shit-1170.meme-cooking.near --limit 100
-bun bin/token_info.ts --ids wrap.near,usdt.tether-token.near
+bun ../shit-1170-rex-ft/bin/balances.ts --account alice.near --sources direct,native
+bun ../shit-1170-rex-ft/bin/holders.ts --token shit-1170.meme-cooking.near --limit 100
+bun ../shit-1170-rex-ft/bin/token_info.ts --token wrap.near,usdt.tether-token.near
 ```
 
 `balances.ts` reads direct token balances, native NEAR, and the Rhea AMM
@@ -729,8 +727,9 @@ tells you whether the account holds native NEAR, wNEAR, or both.
 `holders.ts` is the indexed holder list, paged with the cursor the
 server gives.
 
-`token_info.ts` reads name, symbol, decimals, icon, price, reputation,
-holder count, liquidity, market cap, and total supply.
+`token_info.ts` reads name, symbol, decimals, price, reputation,
+holder count, liquidity, market cap, and total supply — from the
+chain AND the Intear API, labelled as to which is which.
 
 ---
 

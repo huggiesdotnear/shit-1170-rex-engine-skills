@@ -20,7 +20,7 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 ## the skills
 
 - [shit-1170-rex-engine](./shit-1170-rex-engine/SKILL.md) — propose, verify, queue, and track rex engine transactions and swaps
-- [shit-1170-rex-ft](./shit-1170-rex-ft/SKILL.md) — NEP-141 token transfers, contact list, receiver checks, wrapping and unwrapping NEAR through wrap.near
+- [shit-1170-rex-ft](./shit-1170-rex-ft/SKILL.md) — NEP-141 token transfers, contact list, receiver checks, wrapping and unwrapping NEAR through wrap.near, plus the token reads — token info from the chain and the intear API, holders, and an account's balances
   - [WRAP.NEAR.md](./shit-1170-rex-ft/DOCS/WRAP.NEAR.md) — the wrap.near contract, the payloads, and the conditional storage registration
 - [shit-1170-rex-sputnik-dao](./shit-1170-rex-sputnik-dao/SKILL.md) — Sputnik DAO governance: reading a DAO's policy, proposals and bounties, and queueing proposals, votes and bounty actions
   - [SPUTNIK.DAO.md](./shit-1170-rex-sputnik-dao/DOCS/SPUTNIK.DAO.md) — the full method reference: every view and every call, with the argument shape, the gas and the deposit

@@ -8,8 +8,10 @@ an agent uses this to:
 - propose and queue a swap for a human to execute
 - keep a local copy of every queue under `${HOME}/.shit-1170-rex-engine/`
 - store per-account API keys so several accounts can be worked with safely
-- read the same balances, holders, and token data the website shows
 - sync a local queue record with the server after a human sends it
+
+the token reads — holders, balances, token metadata — live in the
+[shit-1170-rex-ft](../shit-1170-rex-ft/SKILL.md) skill.
 
 see [SKILL.md](./SKILL.md) for the workflow and the bins.
 

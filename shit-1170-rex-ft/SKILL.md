@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-ft
-description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the shit-1170 rex engine — the standard method shapes, the gas and deposit for each call, a local contact list, receiver-existence checks, NEP-145 token-storage checks, and token information from the chain and the intear API (price, liquidity, market cap, the pool it trades in). Use this skill whenever the user mentions an FT, fungible token, NEP-141, NEP-145, ft_transfer, ft_transfer_call, ft_balance_of, ft_metadata, ft_total_supply, storage_deposit, storage_balance_of, storage_balance_bounds, storage_withdraw, wNEAR, USDC, USDT, token decimals, token price, token info, the contacts list, or wants to send or transfer tokens to a NEAR account — including checking whether a receiver exists and can hold the token. Also use it whenever a transfer amount must be converted from decimals to the token's raw unit amount, or when the token's price or market cap is wanted. Use it for wrapping and unwrapping NEAR — wrap.near, wNEAR, near_deposit, near_withdraw, converting native NEAR to wNEAR or back. Emit a queue payload for a human to sign; never send it yourself.
+description: Prepare NEAR fungible token (NEP-141 / NEP-145) transfers with the shit-1170 rex engine — the standard method shapes, the gas and deposit for each call, a local contact list, receiver-existence checks, NEP-145 token-storage checks, token information from the chain and the intear API (price, liquidity, market cap, the pool it trades in), a token's holder list, and an account's direct, native and Rhea balances. Use this skill whenever the user mentions an FT, fungible token, NEP-141, NEP-145, ft_transfer, ft_transfer_call, ft_balance_of, ft_metadata, ft_total_supply, storage_deposit, storage_balance_of, storage_balance_bounds, storage_withdraw, wNEAR, USDC, USDT, token decimals, token price, token info, token holders, who holds a token, an account's balances, the contacts list, or wants to send or transfer tokens to a NEAR account — including checking whether a receiver exists and can hold the token. Also use it whenever a transfer amount must be converted from decimals to the token's raw unit amount, or when the token's price, market cap or holder count is wanted. Use it for wrapping and unwrapping NEAR — wrap.near, wNEAR, near_deposit, near_withdraw, converting native NEAR to wNEAR or back. Emit a queue payload for a human to sign; never send it yourself.
 ---
 
 # shit-1170 rex FT
@@ -107,6 +107,66 @@ has not seen. the chain's answer still stands.
 
 the API needs no key, and the middleman's logging goes to stderr so
 stdout stays pure JSON.
+
+---
+
+#### THE HOLDERS
+
+`holders.ts` reads a token's **indexed** holder list — the intear
+index of who holds the token, not a raw on-chain read.
+
+```sh
+bun bin/holders.ts --token shit-1170.meme-cooking.near --limit 100
+```
+
+```json
+{
+  "columns": ["account_id", "balance"],
+  "rows": [["intents.near", "17191524168267330803758258959778"]],
+  "next_cursor": "SLNlkaDmaV6xmEquR-YplJy-FuNoR26cawxn6ve75lA1jz1lJyG...",
+  "total": 5156
+}
+```
+
+the list is **paged with the cursor the server gives** — pass
+`--cursor` with the `next_cursor` from the previous page to get the
+next one. `total` is the holder count.
+
+for the count alone, without the list, `token_info.ts --fields holders`
+gives it in one call.
+
+**the holders are not classified here.** the website splits them into
+dev, dex, vault, nft, burn and regular groups, but that split is the
+website's own — the API answers with the account id and the balance,
+and nothing else.
+
+---
+
+#### THE BALANCES
+
+`balances.ts` reads an account's balances the way the website shows
+them, across three sources:
+
+| source | what it is |
+| --- | --- |
+| `direct` | the account's own token balances |
+| `native` | its native NEAR |
+| `rhea` | its deposits in the Rhea **AMM** |
+
+```sh
+bun bin/balances.ts --account alice.near --sources direct,native
+```
+
+`--tokens token_a,token_b` narrows it to those tokens.
+
+**this is the read that picks a swap's input token.**
+`--sources direct,native` tells you whether the account holds native
+NEAR, wNEAR, or both.
+
+**the `rhea` source is the AMM v2's internal balance only.** it does
+NOT read the Rhea DCL v2 internal balance, nor INTEAR's — for those,
+read the contract directly with the contract's own skill. the Rhea AMM
+skill's `balance.ts` does exactly that with `near.view`.
 
 ### ft_total_supply - VIEW
 
@@ -411,6 +471,8 @@ the whole reference, with the payloads and the conditional rule, is in
 | `ft_balance.ts` | one account's balance of one token, with the decimals |
 | `ft_metadata.ts` | a token's metadata, total supply, and storage bounds |
 | `token_info.ts` | a token's info from the chain AND the intear API — the price, the liquidity, the market cap, the pool it trades in |
+| `holders.ts` | a token's indexed holder list, paged with a cursor |
+| `balances.ts` | an account's direct, native and Rhea balances |
 | `wrap.ts` | prepare a `near_deposit` or `near_withdraw` queue payload, with the storage registration in the wrap batch |
 | `wrap_check.ts` | an account's native NEAR, wNEAR balance, storage registration on `wrap.near`, and what it can wrap |
 | `contacts.ts` | manage the local contact list |
@@ -427,8 +489,8 @@ an `ft_transfer_call`. `--force` overrides the contact-list refusal,
 and `--with-storage-deposit` adds the token's storage registration to
 the batch.
 
-the general skill has the rest: `balances.ts`, `holders.ts`,
-`token_info.ts`, `check_contract.ts`, `check_receiver.ts`.
+the general skill has the rest: `check_contract.ts`,
+`check_receiver.ts`.
 
 ---
 

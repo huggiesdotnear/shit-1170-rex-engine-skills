@@ -8,7 +8,6 @@
         "@huggies/shit-1170-rex-engine-middleman": "^0.0.6",
         "@near-kit-tool-box/env": "0.3.0",
         "@near-kit-tool-box/fun": "0.3.0",
-        "@sleet-js/middleman-intear-api": "^0.1.0",
         "near-kit": "^0.20.2",
       },
       "devDependencies": {
@@ -69,10 +68,6 @@
     "@scure/bip32": ["@scure/bip32@2.4.0", "", { "dependencies": { "@noble/curves": "2.4.0", "@noble/hashes": "2.4.0", "@scure/base": "2.4.0" } }, "sha512-i3DS0CptAocyvqE4n3SUkpzeQK4vJMFwWLofTwRiiKo2aWojBOfyMCgfKw9HVpO6fSY5AK86sHS/Uzn8kK9Few=="],
 
     "@scure/bip39": ["@scure/bip39@2.4.0", "", { "dependencies": { "@noble/hashes": "2.4.0" } }, "sha512-82dxFbZUYboyOf0AXiydsQrFQ5Q4h9mX+O2UkE91ROYmsc0BKMGZLwDmy96Jpa2+vrtoxomjUhy1RPIgH/r2nA=="],
-
-    "@sleet-js/intear-api-tool-box": ["@sleet-js/intear-api-tool-box@0.1.1", "", { "peerDependencies": { "typescript": "^7" } }, "sha512-VjOhxQNc5s9W/Wa4HdfuTJ1KW93krt+rN8VIYI/TqHgprZZgvM8rU0LloJnHjU4EAD2pQwdIq25zkcgiWbk6Bg=="],
-
-    "@sleet-js/middleman-intear-api": ["@sleet-js/middleman-intear-api@0.1.0", "", { "dependencies": { "@sleet-js/intear-api-tool-box": "^0.1.1" }, "peerDependencies": { "typescript": "^7" } }, "sha512-SOsqSjjOgPCGiFy7encRtl5nKFh8EQwvqJkf+GbJjcv5ChzG7b0lbN901aRxqBACdP9fkk2mI+EMPDPCrwp8yA=="],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

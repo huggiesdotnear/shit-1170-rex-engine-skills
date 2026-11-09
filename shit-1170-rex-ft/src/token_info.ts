@@ -5,8 +5,8 @@
 // a token's own metadata — its name, its symbol and its decimals.
 //
 // the intear API adds what the chain does not know: a token's PRICE,
-// its liquidity and its market cap, and the pool it trades in. that
-// is the reason to ask it.
+// its liquidity and its market cap, the pool it trades in, how many
+// holders it has, and its reputation. that is the reason to ask it.
 //
 // so the bins read BOTH and label which is which. when they disagree,
 // the chain wins for the metadata and the API wins for the price.
@@ -34,10 +34,16 @@
 
 import { api_intear_tokens_get } from "@sleet-js/middleman-intear-api";
 import { quiet_fun } from "@huggies/shit-1170-rex-engine-middleman";
+import type { token_requested_field } from "@sleet-js/intear-api-tool-box";
 
-// the fields the skill asks for. the API answers with the columns it
-// was asked for, in the order it was asked.
-const SHIT_1170_TOKEN_INFO_FIELDS = [
+// the fields the skill asks for by default.
+//
+// `holders` is the COUNT of holders, not the holder list — that is
+// `holders.ts`. `reputation` is the indexer's read of the token.
+//
+// `icon_hash` is the small one. `icon` is also valid but it returns a
+// large inline data uri.
+export const SHIT_1170_TOKEN_INFO_DEFAULT_FIELDS = [
   "symbol",
   "name",
   "decimals",
@@ -45,9 +51,28 @@ const SHIT_1170_TOKEN_INFO_FIELDS = [
   "liquidity_usd",
   "market_cap_usd",
   "total_supply",
+  "holders",
+  "reputation",
   "main_pool",
   "reference",
 ] as const;
+
+// every field the API serves for a token. a bin may ask for any of
+// them by name.
+export const SHIT_1170_TOKEN_INFO_FIELDS = [
+  "name",
+  "symbol",
+  "decimals",
+  "reference",
+  "icon_hash",
+  "price_usd",
+  "reputation",
+  "holders",
+  "liquidity_usd",
+  "market_cap_usd",
+  "total_supply",
+  "main_pool",
+] as const satisfies readonly token_requested_field[];
 
 export interface SHIT_1170_TOKEN_INFO {
   // the token's account id.
@@ -60,9 +85,17 @@ export interface SHIT_1170_TOKEN_INFO {
   liquidityUsd: number | null;
   marketCapUsd: number | null;
   totalSupply: string | null;
+  // how many holders the index knows about.
+  holders: number | null;
+  // the indexer's reputation read on the token.
+  reputation: string | null;
   // the pool the token trades in, e.g. `REF-5767`.
   mainPool: string | null;
   reference: string | null;
+  // the fields that were asked for and came back, as the API gave
+  // them. a bin that asked for a field it does not know about finds
+  // it here.
+  raw: Record<string, unknown>;
 }
 
 export interface SHIT_1170_TOKEN_INFO_ANSWER {
@@ -74,6 +107,21 @@ export interface SHIT_1170_TOKEN_INFO_ANSWER {
   height: number | null;
 }
 
+// the API's column name for each field this module names.
+const SHIT_1170_FIELD_COLUMNS: Record<string, string> = {
+  symbol: "symbol",
+  name: "name",
+  decimals: "decimals",
+  price_usd: "price_usd",
+  liquidity_usd: "liquidity_usd",
+  market_cap_usd: "market_cap_usd",
+  total_supply: "total_supply",
+  holders: "holders",
+  reputation: "reputation",
+  main_pool: "main_pool",
+  reference: "reference",
+};
+
 /**
  * the token information for a list of token account ids.
  *
@@ -82,6 +130,7 @@ export interface SHIT_1170_TOKEN_INFO_ANSWER {
  */
 export async function shit_1170_token_info_fun(
   token_ids: string[],
+  fields: readonly token_requested_field[] = SHIT_1170_TOKEN_INFO_DEFAULT_FIELDS,
 ): Promise<SHIT_1170_TOKEN_INFO_ANSWER> {
   const ids = token_ids.map((id) => id.trim()).filter(Boolean);
   if (!ids.length) {
@@ -92,7 +141,7 @@ export async function shit_1170_token_info_fun(
   // the length of the call.
   const result = await quiet_fun(() =>
     api_intear_tokens_get({
-      fields: SHIT_1170_TOKEN_INFO_FIELDS,
+      fields,
       ids,
     }),
   );
@@ -112,7 +161,8 @@ export async function shit_1170_token_info_fun(
       byField[columns[i]] = values[i];
     }
 
-    const pick = (field: string): unknown => byField[field];
+    const pick = (field: string): unknown =>
+      byField[SHIT_1170_FIELD_COLUMNS[field] ?? field];
 
     tokens.push({
       accountId,
@@ -132,8 +182,15 @@ export async function shit_1170_token_info_fun(
           ? (pick("market_cap_usd") as number)
           : null,
       totalSupply: (pick("total_supply") as string | undefined) ?? null,
+      holders:
+        typeof pick("holders") === "number"
+          ? (pick("holders") as number)
+          : null,
+      reputation: (pick("reputation") as string | undefined) ?? null,
       mainPool: (pick("main_pool") as string | undefined) ?? null,
       reference: (pick("reference") as string | undefined) ?? null,
+      // everything the API gave, under the column names it used.
+      raw: byField,
     });
   }
 

@@ -18,6 +18,8 @@ bun bin/ft_transfer.ts --token <token_id> --receiver <account_id> --amount <unit
 bun bin/ft_balance.ts --token <token_id> --account <account_id>
 bun bin/ft_metadata.ts --token <token_id>
 bun bin/token_info.ts --token <token_id[,token_id,...]>
+bun bin/holders.ts --token <token_id> [--limit 100] [--cursor <cursor>]
+bun bin/balances.ts --account <account_id> [--sources direct,native,rhea] [--tokens token_a,token_b]
 bun bin/wrap_check.ts --account <account_id>
 bun bin/wrap.ts --direction wrap|unwrap|storage --amount <unit_amount>
 bun bin/contacts.ts list
@@ -75,6 +77,36 @@ when the two disagree about the symbol or the decimals, the chain
 wins — the API's symbol is a label, and the same symbol can name
 different tokens with different decimals. a token the API lists under
 `missing` is one the indexer has not seen, not a broken token.
+
+---
+
+#### THE HOLDERS
+
+`holders.ts` reads a token's **indexed** holder list, paged with the
+cursor the server gives.
+
+```sh
+bun bin/holders.ts --token shit-1170.meme-cooking.near --limit 100
+```
+
+the list is not classified here — the website's dev / dex / vault /
+nft / burn / regular split is the website's own. for the holder count
+alone, `token_info.ts --fields holders` gives it in one call.
+
+---
+
+#### THE BALANCES
+
+`balances.ts` reads an account's balances the way the website shows
+them, across three sources: `direct` (its own token balances),
+`native` (its NEAR) and `rhea` (its deposits in the Rhea AMM).
+
+```sh
+bun bin/balances.ts --account alice.near --sources direct,native
+```
+
+the `rhea` source is the AMM v2's internal balance only — the Rhea DCL
+v2 internal balance and INTEAR's need the contract's own skill.
 
 ---
 

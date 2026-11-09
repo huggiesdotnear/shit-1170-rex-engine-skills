@@ -12,7 +12,10 @@ import {
   shit_1170_network_fun,
   shit_1170_near_client_fun,
 } from "../src/chain";
-import { shit_1170_token_info_fun } from "../src/token_info";
+import {
+  SHIT_1170_TOKEN_INFO_DEFAULT_FIELDS,
+  shit_1170_token_info_fun,
+} from "../src/token_info";
 
 // read a token's info — from the chain and from the intear API.
 //
@@ -22,12 +25,22 @@ import { shit_1170_token_info_fun } from "../src/token_info";
 // about itself.
 //
 // the INTEAR API adds what the chain does not know: the token's PRICE,
-// its liquidity, its market cap, and the pool it trades in.
+// its liquidity, its market cap, the pool it trades in, how many
+// holders it has, and its reputation.
 //
-// so this bin reads both and labels which is which. when the two
-// disagree about the symbol or the decimals, the chain wins — the
-// API's symbol is a label the indexer carries, and the same symbol
-// can name different tokens with different decimals.
+// so this bin reads both and labels which is which. when they disagree
+// about the symbol or the decimals, the chain wins — the API's symbol
+// is a label the indexer carries, and the same symbol can name
+// different tokens with different decimals.
+//
+// --- THE FIELDS ---
+// `--fields` narrows what the API answers with. the default set
+// carries the symbol, the name, the decimals, the price, the
+// liquidity, the market cap, the total supply, the holder count, the
+// reputation and the main pool.
+//
+// `icon_hash` is the small one. `icon` is also valid but it returns a
+// large inline data uri.
 //
 // --- THE MISSING TOKENS ---
 // a token the indexer has not seen comes back in `missing`. that is
@@ -42,18 +55,35 @@ async function main_fun(): Promise<void> {
   if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
     print_json_fun({
       ok: true,
-      usage: ["token_info --token <token_id[,token_id,...]> [--network mainnet|testnet]"],
+      usage: [
+        "token_info --token <token_id[,token_id,...]> [--network mainnet|testnet]",
+        "token_info --token <ids> [--fields symbol,decimals,price_usd,holders]",
+        "the fields are: name, symbol, decimals, reference, icon_hash, price_usd, reputation, holders, liquidity_usd, market_cap_usd, total_supply, main_pool",
+      ],
     });
     return;
   }
 
-  const tokenInput = args_string_fun(args, "token");
-  if (!tokenInput) throw new Error("--token <token_id[,token_id,...]> is required");
+  // `--token` and `--ids` are the same thing under two names.
+  const tokenInput =
+    args_string_fun(args, "token") ?? args_string_fun(args, "ids");
+  if (!tokenInput) {
+    throw new Error("--token <token_id[,token_id,...]> is required");
+  }
   const tokens = tokenInput
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
   const network = shit_1170_network_fun(args_string_fun(args, "network"));
+
+  // the fields the API should answer with.
+  const fieldsInput = args_string_fun(args, "fields");
+  const fields = fieldsInput
+    ? (fieldsInput
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean) as never[])
+    : [...SHIT_1170_TOKEN_INFO_DEFAULT_FIELDS];
 
   // the chain's own answer, per token.
   const chain: Record<string, unknown> = {};
@@ -77,7 +107,7 @@ async function main_fun(): Promise<void> {
   // the api's answer. it is an index, so it may not know the token.
   let api: Awaited<ReturnType<typeof shit_1170_token_info_fun>> | null = null;
   try {
-    api = await shit_1170_token_info_fun(tokens);
+    api = await shit_1170_token_info_fun(tokens, fields);
   } catch (error) {
     warnings.push(
       `the intear api could not be reached: ${error instanceof Error ? error.message : String(error)}`,
@@ -88,6 +118,7 @@ async function main_fun(): Promise<void> {
     ok: true,
     network,
     tokens,
+    fields,
     // the token's own words, from the chain.
     chain,
     // the price and the market data, from the intear api.
