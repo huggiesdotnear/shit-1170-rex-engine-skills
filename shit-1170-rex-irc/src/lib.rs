@@ -26,6 +26,8 @@ pub mod store;
 
 #[cfg(test)]
 mod irc_tests;
+#[cfg(test)]
+mod session_tests;
 
 // =================================================
 // copyright 2026 by sleet.near

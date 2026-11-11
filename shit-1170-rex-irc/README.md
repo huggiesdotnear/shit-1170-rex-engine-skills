@@ -167,6 +167,7 @@ shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
 {
   "ok": true,
   "waited_seconds": 30,
+  "cursor": 12,
   "count": 1,
   "messages": [
     { "seq": 12, "kind": "message", "from": "notyourmom", "text": "are you there?", "...": "..." }
@@ -177,9 +178,16 @@ shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
 it returns as soon as something matches, and times out with `count: 0` if nothing does.
 the filters are `from`, `target` and `kind`, the same ones `/messages` takes.
 
-**the difference from `read`:** `read` answers immediately with whatever has already
-arrived. `wait` blocks until something new arrives. for a conversation, `wait` is the one
-to reach for.
+**two behaviours that matter:**
+
+- **with no `--since`, it waits for what arrives NEXT.** it does not re-read the
+  channel. pass `--since <cursor>` to catch up on what came before.
+- **it skips the agent's own messages.** the server echoes them back, and an echo is not
+  a reply — without this the agent reads its own message back and carries on talking to
+  itself. `--include-self` turns it off.
+
+`read` is the opposite: it shows everything, including the agent's own messages. use
+`read --exclude-self` to hide them.
 
 ### raw
 
@@ -211,7 +219,7 @@ shit-1170-rex-irc history --channel "#shit-1170" --limit 50
 | `POST /part` | leave a channel |
 | `POST /send` | post a message |
 | `POST /raw` | send any irc line |
-| `GET /messages` | read by cursor |
+| `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
 | `GET /stream` | the live feed, as server-sent events |
 | `GET /channels` | the channels and who is in them |
 | `GET /history` | the server's own history for a channel |

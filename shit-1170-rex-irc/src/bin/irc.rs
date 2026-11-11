@@ -105,6 +105,9 @@ enum Command {
         /// only events for this channel.
         #[arg(long)]
         target: Option<String>,
+        /// drop the events from our own nick.
+        #[arg(long)]
+        exclude_self: bool,
         /// the port the daemon listens on.
         #[arg(long, default_value = "8787")]
         api_port: u16,
@@ -144,6 +147,15 @@ enum Command {
     /// this blocks until something comes in, so the agent does not
     /// have to poll. it is the difference between a sleep-and-read
     /// loop and one call.
+    ///
+    /// --- WHY THE AGENT'S OWN MESSAGES ARE SKIPPED ---
+    /// the server advertises `echo-message`, so every message the
+    /// agent sends comes straight back to it. waiting for a reply
+    /// would return the agent's own message and call it a reply —
+    /// which is how a conversation turns into talking to itself.
+    ///
+    /// so by default `wait` skips the messages from our own nick.
+    /// `--include-self` turns that off when you want to see them.
     Wait {
         /// how long to wait, in seconds.
         #[arg(long, default_value_t = 30)]
@@ -157,9 +169,16 @@ enum Command {
         /// only messages of this kind.
         #[arg(long)]
         kind: Option<String>,
-        /// the cursor to start from. the last cursor, to not miss any.
-        #[arg(long, default_value_t = 0)]
-        since: u64,
+        /// the cursor to start from.
+        ///
+        /// the default is "from now" — the wait only sees messages
+        /// that arrive while it is waiting. pass the cursor from the
+        /// last read to catch up on what came before.
+        #[arg(long)]
+        since: Option<u64>,
+        /// include our own messages. off by default.
+        #[arg(long)]
+        include_self: bool,
         /// the port the daemon listens on.
         #[arg(long, default_value = "8787")]
         api_port: u16,
@@ -325,6 +344,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             limit,
             kind,
             target,
+            exclude_self,
             api_port,
         } => {
             let mut query = format!("?since={since}&limit={limit}");
@@ -333,6 +353,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if let Some(target) = target {
                 query.push_str(&format!("&target={}", urlencode(&target)));
+            }
+            if exclude_self {
+                query.push_str("&exclude_self=true");
             }
             let answer = get(&api_url(api_port), &format!("/messages{query}")).await?;
             println!("{}", serde_json::to_string_pretty(&answer)?);
@@ -366,6 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             target,
             kind,
             since,
+            include_self,
             api_port,
         } => {
             // --- WHY THIS POLLS INSTEAD OF STREAMING ---
@@ -377,8 +401,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // as soon as something matches. the wait happens HERE,
             // not in the agent, so the agent makes one call instead of
             // a sleep-and-read loop.
+            // --- WHY THE CURSOR DEFAULTS TO "FROM NOW" ---
+            // a wait with no cursor would start at 0 and read the
+            // whole backlog — the join notices, the old test
+            // messages, everything. the agent asked to wait for the
+            // NEXT message, not to re-read the channel.
+            //
+            // so with no cursor the wait starts at the daemon's
+            // current head, and only sees what arrives while it
+            // waits. pass `--since` to catch up on what came before.
+            let mut cursor = match since {
+                Some(since) => since,
+                None => {
+                    let status = get(&api_url(api_port), "/status").await?;
+                    status.get("cursor").and_then(|c| c.as_u64()).unwrap_or(0)
+                }
+            };
+
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
-            let mut cursor = since;
             let mut found: Vec<serde_json::Value> = Vec::new();
 
             while std::time::Instant::now() < deadline {
@@ -392,6 +432,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(from) = &from {
                     query.push_str(&format!("&from={}", urlencode(from)));
                 }
+                // the agent's own messages are not replies. the server
+                // echoes them back, so they have to be filtered out or
+                // the agent ends up talking to itself.
+                if !include_self {
+                    query.push_str("&exclude_self=true");
+                }
 
                 let answer = get(&api_url(api_port), &format!("/messages{query}")).await?;
                 let messages = answer
@@ -400,15 +446,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .cloned()
                     .unwrap_or_default();
 
+                // --- THE CURSOR MOVES PAST EVERYTHING SEEN ---
+                // this happens BEFORE the emptiness check, and it
+                // happens whether or not anything matched. the
+                // filtered-out messages still advanced the log, so
+                // the next poll must start after them — otherwise
+                // they are returned again on the next iteration and
+                // the wait never sees the real reply.
+                if let Some(head) = answer.get("cursor").and_then(|c| c.as_u64()) {
+                    cursor = head;
+                }
+
                 if !messages.is_empty() {
                     found = messages;
                     break;
-                }
-
-                // keep the cursor current so a slow message is not
-                // missed between polls.
-                if let Some(head) = answer.get("cursor").and_then(|c| c.as_u64()) {
-                    cursor = head;
                 }
 
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -419,6 +470,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 serde_json::to_string_pretty(&json!({
                     "ok": true,
                     "waited_seconds": seconds,
+                    "cursor": cursor,
                     "count": found.len(),
                     "messages": found,
                 }))?

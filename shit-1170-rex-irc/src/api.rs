@@ -345,6 +345,13 @@ struct MessagesQuery {
     /// only events from this nick.
     #[serde(default)]
     from: Option<String>,
+    /// drop the events that came from our own nick.
+    ///
+    /// the server advertises `echo-message`, so every message the
+    /// agent sends comes back to it. a caller waiting for a REPLY
+    /// does not want its own message — that is not a reply.
+    #[serde(default)]
+    exclude_self: Option<bool>,
 }
 
 async fn messages(
@@ -353,6 +360,7 @@ async fn messages(
 ) -> axum::response::Response {
     let since = query.since.unwrap_or(0);
     let limit = query.limit.unwrap_or(200).min(2000);
+    let me = session.options.nick.to_lowercase();
 
     let entries = session.since(since, limit * 4).await;
 
@@ -363,6 +371,16 @@ async fn messages(
                 && &entry.event.kind != kind {
                     return false;
                 }
+            if query.exclude_self == Some(true)
+                && entry
+                    .event
+                    .from
+                    .as_ref()
+                    .map(|f| f.to_lowercase() == me)
+                    .unwrap_or(false)
+            {
+                return false;
+            }
             if let Some(target) = &query.target {
                 let want = target.to_lowercase();
                 let have = entry

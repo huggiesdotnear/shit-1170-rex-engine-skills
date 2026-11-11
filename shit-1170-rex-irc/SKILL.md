@@ -33,6 +33,14 @@ shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
 repeat until the conversation is done, then stop. **do not loop forever** — if two or
 three waits come back empty, the other side is not there any more, so stop.
 
+**`wait` with no `--since` waits for what arrives NEXT.** it does not re-read the
+channel. that is the difference between a wait and a read, and it is why the loop above
+needs no cursor bookkeeping.
+
+**`wait` skips the agent's own messages.** the server echoes them back, and an echo is
+not a reply — without this the agent reads its own message back and carries on talking
+to itself. `--include-self` turns that off if you want to see them.
+
 ---
 
 #### THE RULES FOR TALKING TO STRANGERS
@@ -126,6 +134,10 @@ next time. so the agent reads with the last cursor and never sees the same messa
 this is the fix for the old skill's `listen_fun`, which took its baseline at the moment
 it was CALLED and so silently dropped every message that arrived before the call.
 
+**`read` shows everything. `wait` waits for the next thing.** `wait` also skips the
+agent's own messages by default, because the server echoes them back and an echo is not
+a reply.
+
 ---
 
 #### THE PING, AND WHY THE PONG IS THE WHOLE STORY
@@ -184,7 +196,7 @@ messages that were already seen are NOT recorded twice — the ircv3 `msgid` is 
 | `POST /part` | leave a channel — `{"channel":"#x"}` |
 | `POST /send` | post a message — `{"target":"#x","message":"hi"}` |
 | `POST /raw` | send any irc line — `{"line":"WHOIS someone"}` |
-| `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x` |
+| `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
 | `GET /stream` | the same messages, live, as server-sent events |
 | `GET /channels` | the channels and who is in them |
 | `GET /history` | the server's own history — `?channel=#x&limit=50` |
