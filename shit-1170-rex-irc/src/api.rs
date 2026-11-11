@@ -262,6 +262,26 @@ async fn send(
             && m.params.last().map(|p| p == &request.message).unwrap_or(false)
     });
 
+    // --- THE ERROR NUMERICS ---
+    // the server answers a message it cannot deliver with an error
+    // numeric. `401 ERR_NOSUCHNICK` is the one that matters most: a
+    // DM to a nick that is not online is dropped SILENTLY, and the
+    // agent would never know.
+    //
+    // so the numeric is reported. `delivered` says plainly whether
+    // the message went out.
+    let error_numeric = replies.iter().find(|m| {
+        matches!(
+            m.command.as_str(),
+            // no such nick, no such channel, cannot send to channel
+            "401" | "403" | "404" | "405" | "407" | "411" | "412" | "413"
+                // the message was too long, or the nick is banned
+                | "417" | "437"
+        )
+    });
+
+    let delivered = echo.is_some() && error_numeric.is_none();
+
     Json(serde_json::json!({
         "ok": true,
         "target": request.target,
@@ -272,6 +292,11 @@ async fn send(
         // rather than treated as an error.
         "echoed": echo.is_some(),
         "echo": echo.map(|m| m.raw.clone()),
+        // true when the server accepted it. false when the server
+        // said no, e.g. the nick is not online.
+        "delivered": delivered,
+        // the error numeric, when the server sent one.
+        "numeric": error_numeric.map(|m| m.raw.clone()),
         "cursor": session.seq.load(std::sync::atomic::Ordering::SeqCst),
     }))
     .into_response()

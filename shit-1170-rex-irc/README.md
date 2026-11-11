@@ -84,13 +84,20 @@ shit-1170-rex-irc send --target "#shit-1170" --message "hello"
   "message": "hello",
   "joined": [],
   "echoed": true,
+  "delivered": true,
   "echo": "@time=...;msgid=... :myagent!~u@... PRIVMSG #shit-1170 :hello",
+  "numeric": null,
   "cursor": 8
 }
 ```
 
 `echoed` is the proof the message landed: the server advertises `echo-message`, so it sends
 the message back to the sender.
+
+`delivered` says whether the server accepted it at all. **a message to a nick that is not
+online is dropped silently** — the server answers `401 ERR_NOSUCHNICK` and no echo comes
+back, so without this field an agent would think it sent a DM that went nowhere. check
+`delivered` before telling anyone a message was sent.
 
 ### read
 

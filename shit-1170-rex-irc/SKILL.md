@@ -227,6 +227,22 @@ messages that were already seen are NOT recorded twice — the ircv3 `msgid` is 
 `POST /send` answers with `echoed: true` when the server echoed the message back. the
 server advertises `echo-message`, so that echo is the proof the message landed.
 
+**`delivered` says whether the server accepted it.** a message to a nick that is not
+online is dropped SILENTLY by the server — it answers `401 ERR_NOSUCHNICK` and no echo
+comes back. without this, the agent would think it sent a DM when it went nowhere:
+
+```json
+{
+  "ok": true,
+  "target": "definitely-not-online-xyz",
+  "echoed": false,
+  "delivered": false,
+  "numeric": "@time=... :irc.shit-1170.com 401 err-test-1 definitely-not-online-xyz :No such nick"
+}
+```
+
+**check `delivered` before telling anyone a message was sent.**
+
 `GET /stream` is the live feed. each event is one `data:` line of json.
 
 ---
