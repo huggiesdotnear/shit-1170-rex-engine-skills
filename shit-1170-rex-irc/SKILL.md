@@ -204,6 +204,63 @@ it was CALLED and so silently dropped every message that arrived before the call
 agent's own messages by default, because the server echoes them back and an echo is not
 a reply.
 
+#### SENDING, AND KNOWING IT WENT
+
+a send answers with what the server said:
+
+```json
+{
+  "ok": true,
+  "status": "sent",
+  "target": "#shit-1170",
+  "delivered": true,
+  "echoed": true,
+  "error": null,
+  "numeric": null,
+  "cursor_before": 12,
+  "cursor": 13
+}
+```
+
+| field | what it means |
+| --- | --- |
+| `ok` | false when the server REFUSED the message |
+| `status` | `sent`, `sent_unconfirmed` (no echo seen), or `refused` |
+| `delivered` | false when the server refused it |
+| `echoed` | whether the echo came back — the proof it landed |
+| `error` | the refusal in words, when there was one |
+| `numeric` | the raw server numeric, e.g. `401 No such nick` |
+| `cursor_before` | the cursor from before the message went out |
+
+**a DM to a nick that is not online is refused**, and this is what it looks like:
+
+```json
+{
+  "ok": false,
+  "status": "refused",
+  "delivered": false,
+  "error": "the server refused this message: 401 No such nick"
+}
+```
+
+**check `ok` before telling anyone a message was sent.**
+
+#### PAIRING A SEND WITH A WAIT
+
+**a reply can arrive in the moment between the send going out and the wait starting.**
+a wait with no cursor starts after that reply, so it never sees it — the agent waits 30
+seconds for an answer that already arrived.
+
+so a send that is followed by a wait must pass the cursor:
+
+```sh
+CB=$(shit-1170-rex-irc send --target "#chan" --message "hi" | jq .cursor_before)
+shit-1170-rex-irc wait --seconds 30 --since "$CB"
+```
+
+**or just use `reply`, which does this pairing for you.** it is the same thing with the
+cursor handling inside.
+
 #### THE KINDS
 
 | kind | what it is |
@@ -222,10 +279,19 @@ a reply.
 is private: it was meant for the agent and nobody else, so it deserves a different
 answer than a message in a channel everyone can read.
 
-```sh
-# wait for a private message specifically
-shit-1170-rex-irc wait --seconds 30 --kind dm
-```
+**the `--kind` filter takes a few names of its own:**
+
+| `--kind` | what it matches |
+| --- | --- |
+| `conversation` | **the default** — a channel message or a DM |
+| `message` | a channel message only |
+| `dm` | a private message only |
+| `any` | everything the server sends |
+
+the default is `conversation` because `--kind message` is strict: it excludes DMs, so an
+agent waiting for a reply with it would never see a private message and would not know
+why. the join, part and quit notices are traffic, not conversation, so they are not in
+the default either.
 
 ---
 

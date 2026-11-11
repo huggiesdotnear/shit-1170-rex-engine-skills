@@ -119,8 +119,12 @@ enum Command {
         /// only accept a reply from this nick.
         #[arg(long)]
         from: Option<String>,
-        /// only accept a reply of this kind. `message`, `dm`, ...
-        #[arg(long, default_value = "message")]
+        /// only accept a reply of this kind.
+        ///
+        /// `conversation` is the default: a channel message or a DM.
+        /// `message` is a channel message only, `dm` is a private
+        /// message only, `any` is everything.
+        #[arg(long, default_value = "conversation")]
         kind: String,
         /// the port the daemon listens on.
         #[arg(long, default_value = "8787")]
@@ -200,6 +204,16 @@ enum Command {
     ///
     /// so by default `wait` skips the messages from our own nick.
     /// `--include-self` turns that off when you want to see them.
+    ///
+    /// --- WHY THE DEFAULT KIND IS "conversation" ---
+    /// `--kind message` is strict: it means a message in a channel,
+    /// and it excludes a DM. so an agent waiting for a reply with
+    /// `--kind message` would never see a private message, and would
+    /// not know why.
+    ///
+    /// the default is `conversation`, which is a channel message OR a
+    /// DM — the things a person would read as being spoken to them.
+    /// the join, part and quit notices are traffic, not conversation.
     Wait {
         /// how long to wait, in seconds.
         #[arg(long, default_value_t = 30)]
@@ -211,13 +225,31 @@ enum Command {
         #[arg(long)]
         target: Option<String>,
         /// only messages of this kind.
-        #[arg(long)]
-        kind: Option<String>,
+        ///
+        /// `conversation` is the default: a channel message or a DM.
+        /// `message` is a channel message only, `dm` is a private
+        /// message only, `any` is everything the server sends.
+        #[arg(long, default_value = "conversation")]
+        kind: String,
         /// the cursor to start from.
         ///
         /// the default is "from now" — the wait only sees messages
         /// that arrive while it is waiting. pass the cursor from the
         /// last read to catch up on what came before.
+        ///
+        /// --- WHY THE CURSOR MATTERS WHEN YOU PAIR WITH A SEND ---
+        /// a reply can arrive in the moment between the send going
+        /// out and the wait starting. a wait with no cursor starts
+        /// AFTER that reply, so it never sees it — and the agent
+        /// waits 30 seconds for an answer that already arrived.
+        ///
+        /// so a send that is followed by a wait must pass the
+        /// cursor. `send` reports it as `cursor_before`:
+        ///
+        ///     CB=$(send --target "#chan" --message "hi" | jq .cursor_before)
+        ///     wait --seconds 30 --since "$CB"
+        ///
+        /// or just use `reply`, which does this pairing for you.
         #[arg(long)]
         since: Option<u64>,
         /// include our own messages. off by default.
@@ -474,7 +506,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             //
             // so the cursor is read BEFORE posting. everything after
             // that point is a candidate reply.
-            let mut cursor = get(&api_url(api_port), "/status")
+            //
+            // the send also reports `cursor_before` — the cursor it
+            // saw when the message went out. if it is EARLIER than
+            // what we read here, the earlier one wins, because it
+            // covers a wider window.
+            let before_send = get(&api_url(api_port), "/status")
                 .await?
                 .get("cursor")
                 .and_then(|c| c.as_u64())
@@ -483,6 +520,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 1. post.
             let body = json!({ "target": target, "message": message });
             let sent = post(&api_url(api_port), "/send", &body).await?;
+
+            // the earlier of the two cursors wins — it covers more.
+            let mut cursor = sent
+                .get("cursor_before")
+                .and_then(|c| c.as_u64())
+                .unwrap_or(before_send)
+                .min(before_send);
 
             // 2. wait for the answer. the agent's own message is
             //    skipped, so the reply it gets is really somebody
@@ -529,6 +573,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "delivered": sent.get("delivered").cloned().unwrap_or(json!(false)),
                     "numeric": sent.get("numeric").cloned().unwrap_or(json!(null)),
                     "cursor": cursor,
+                    // --- THE SAME SHAPE AS read AND wait ---
+                    // an agent writing one "give me the messages"
+                    // parser should not break on the reply command.
+                    // so `count` and `messages` are the names here
+                    // too, with the older names kept as aliases.
+                    "count": replies.len(),
+                    "messages": replies,
                     "reply_count": replies.len(),
                     "replies": replies,
                 }))?
@@ -575,8 +626,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             while std::time::Instant::now() < deadline {
                 let mut query = format!("?since={cursor}&limit=100");
-                if let Some(kind) = &kind {
-                    query.push_str(&format!("&kind={}", urlencode(kind)));
+                if !kind.is_empty() {
+                    query.push_str(&format!("&kind={}", urlencode(&kind)));
                 }
                 if let Some(target) = &target {
                     query.push_str(&format!("&target={}", urlencode(target)));

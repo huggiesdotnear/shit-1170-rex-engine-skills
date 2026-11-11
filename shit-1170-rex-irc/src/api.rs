@@ -243,6 +243,18 @@ async fn send(
         }
     }
 
+    // --- THE CURSOR BEFORE THE SEND ---
+    // a reply can arrive DURING the send's wait for the echo. by the
+    // time the send answers, the cursor it returns is already past
+    // that reply, so a `wait --since <cursor>` would never see it.
+    //
+    // so the send reports the cursor it started from as well. a
+    // caller that wants to catch the reply does:
+    //
+    //     send  ->  cursor_before
+    //     wait --since <cursor_before>
+    let cursor_before = session.seq.load(std::sync::atomic::Ordering::SeqCst);
+
     // send the message. the read loop does the sending, because it
     // owns the socket.
     let (reply, wait) = tokio::sync::oneshot::channel();
@@ -287,16 +299,42 @@ async fn send(
         )
     });
 
-    let delivered = echo.is_some() && error_numeric.is_none();
+    // --- THE DELIVERED FLAG ---
+    // the server refuses a message it cannot deliver, and says so with
+    // an error numeric. `401 ERR_NOSUCHNICK` is the one that matters
+    // most: a DM to a nick that is not online is dropped SILENTLY,
+    // and the agent would never know.
+    //
+    // so a message is DELIVERED unless the server said no.
+    //
+    // a missing echo on its own does not mean failure — it means we
+    // did not see the proof in time. that is a different thing, and
+    // the two are reported separately: `delivered` for the server's
+    // verdict, `echoed` for whether we saw the echo.
+    let refused = error_numeric.is_some();
+    let delivered = !refused;
 
-    Json(serde_json::json!({
-        "ok": true,
+    // --- THE `ok` FLAG ---
+    // `ok` used to mean "the api call worked", which is true even
+    // when the server threw the message away. an agent checking `ok`
+    // would believe a DM to a nick that was not online had been sent.
+    //
+    // so `ok` means "the server did not refuse this".
+    let error = error_numeric.map(|m| {
+        let numeric = m.command.clone();
+        let text = m.params.last().cloned().unwrap_or_default();
+        format!("the server refused this message: {numeric} {text}")
+    });
+
+    let ok = delivered;
+
+    let mut answer = serde_json::json!({
+        "ok": ok,
         "target": request.target,
         "message": request.message,
         "joined": joined,
-        // the echo is the proof. its absence is not a failure — the
-        // message may still have been delivered — so it is reported
-        // rather than treated as an error.
+        // whether we saw the echo. this is the proof the message
+        // landed, but it is not the same as "the server refused it".
         "echoed": echo.is_some(),
         "echo": echo.map(|m| m.raw.clone()),
         // true when the server accepted it. false when the server
@@ -304,9 +342,27 @@ async fn send(
         "delivered": delivered,
         // the error numeric, when the server sent one.
         "numeric": error_numeric.map(|m| m.raw.clone()),
+        // the same thing in words, for when the numeric is opaque.
+        "error": error,
+        // the cursor before the message went out. pair a `wait` with
+        // this to catch a reply that landed while the send was waiting
+        // for the echo.
+        "cursor_before": cursor_before,
         "cursor": session.seq.load(std::sync::atomic::Ordering::SeqCst),
-    }))
-    .into_response()
+    });
+
+    // keep the shape honest: the status says it in words too.
+    if !ok {
+        answer["status"] = serde_json::json!("refused");
+    } else if echo.is_some() {
+        answer["status"] = serde_json::json!("sent");
+    } else {
+        // the server did not refuse it, but we did not see the echo.
+        // that is worth saying out loud.
+        answer["status"] = serde_json::json!("sent_unconfirmed");
+    }
+
+    Json(answer).into_response()
 }
 
 /// send any irc line.
@@ -400,9 +456,10 @@ async fn messages(
         .into_iter()
         .filter(|entry| {
             if let Some(kind) = &query.kind
-                && &entry.event.kind != kind {
-                    return false;
-                }
+                && !kind_matches(kind, &entry.event.kind)
+            {
+                return false;
+            }
             if query.exclude_self == Some(true)
                 && entry
                     .event
@@ -465,6 +522,25 @@ async fn messages(
     .into_response()
 }
 
+/// does an event of this kind match what the caller asked for?
+///
+/// `conversation` is the default, and it means the things a person
+/// would read as being spoken to them: a channel message or a DM.
+///
+/// `message` is a channel message only, and `dm` is a private message
+/// only. `any` is everything.
+///
+/// the strictness matters: `--kind message` used to be the only
+/// sensible filter, and it excluded DMs, so an agent waiting for a
+/// reply would never see a private one and would not know why.
+fn kind_matches(wanted: &str, actual: &str) -> bool {
+    match wanted {
+        "conversation" => actual == "message" || actual == "dm",
+        "any" => true,
+        other => other == actual,
+    }
+}
+
 /// the live stream of messages.
 ///
 /// the filters are the same ones `/messages` takes, so a consumer
@@ -507,7 +583,7 @@ async fn stream(
                 Ok(event) => {
                     // --- THE FILTERS ---
                     if let Some(kind) = &kind
-                        && &event.kind != kind {
+                        && !kind_matches(kind, &event.kind) {
                         continue;
                     }
                     if let Some(target) = &target {
