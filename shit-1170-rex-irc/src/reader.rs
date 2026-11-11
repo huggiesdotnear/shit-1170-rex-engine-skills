@@ -106,6 +106,24 @@ pub async fn run(session: Arc<Session>) {
                     );
                     true
                 }
+                Err(IrcError::NickInUse { nick }) => {
+                    // --- WHY THIS IS NOT RETRIED ---
+                    // the nickname is taken. that will not change by
+                    // trying again, so a reconnect loop would spin
+                    // forever on something only the operator can fix.
+                    //
+                    // so it stops, and says why.
+                    session.mark_disconnected();
+                    session.set_registration_error(format!(
+                        "the nickname {nick} is already in use. pick another one, with --nick."
+                    ))
+                    .await;
+                    tracing::error!(
+                        nick = %nick,
+                        "the nickname is already in use. not retrying — pick another with --nick."
+                    );
+                    return;
+                }
                 Err(err) => {
                     session.mark_disconnected();
                     tracing::warn!(%err, "connect failed, retrying");

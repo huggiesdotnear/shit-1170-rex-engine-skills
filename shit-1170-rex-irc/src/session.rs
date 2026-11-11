@@ -66,6 +66,11 @@ pub struct Session {
     pub reconnects: AtomicU64,
     /// when the connection came up, as a unix timestamp in seconds.
     pub connected_at: Mutex<Option<u64>>,
+    /// why the registration failed, when it did.
+    ///
+    /// a nick that is already in use is permanent — retrying will not
+    /// help — so the reason is kept and reported rather than looping.
+    pub registration_error: Mutex<Option<String>>,
     /// the channel the read loop takes commands from.
     ///
     /// the read loop owns the socket, so it is the only thing that may
@@ -88,8 +93,21 @@ impl Session {
             connected: Arc::new(AtomicU64::new(0)),
             reconnects: AtomicU64::new(0),
             connected_at: Mutex::new(None),
+            registration_error: Mutex::new(None),
             commands: Mutex::new(None),
         })
+    }
+
+    /// record why the registration failed.
+    pub async fn set_registration_error(&self, message: String) {
+        let mut guard = self.registration_error.lock().await;
+        *guard = Some(message);
+    }
+
+    /// why the registration failed, if it did.
+    pub async fn registration_error(&self) -> Option<String> {
+        let guard = self.registration_error.lock().await;
+        guard.clone()
     }
 
     /// record that the connection came up.

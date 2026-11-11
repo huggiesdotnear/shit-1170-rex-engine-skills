@@ -103,7 +103,11 @@ async fn status(State(session): State_) -> impl IntoResponse {
         "server": session.options.server,
         "url": connection.url(),
         "nick": session.options.nick,
-        "registered": connection.registered,
+        // `registered` follows the live connection. the old version
+        // reported the last known state, so it could say
+        // `registered: true` while `connected: false` — two answers
+        // that contradict each other.
+        "registered": session.is_connected() && connection.registered,
         "sasl": connection.sasl_ok,
         "channels": connection.channels,
         "motd": connection.motd,
@@ -115,7 +119,11 @@ async fn status(State(session): State_) -> impl IntoResponse {
         // is the first thing to look at when a conversation keeps
         // stalling.
         "reconnects": session.reconnects.load(std::sync::atomic::Ordering::Relaxed),
-        "uptime_seconds": session.uptime_seconds().await,
+        "uptime_seconds": session.uptime_seconds().await.unwrap_or(0),
+        // why the registration failed, when it did. a nick that is
+        // already in use is permanent — the daemon stops rather than
+        // looping on it — so the reason has to be here.
+        "registration_error": session.registration_error().await,
     }))
 }
 

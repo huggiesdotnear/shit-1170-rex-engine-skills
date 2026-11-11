@@ -295,6 +295,9 @@ pub enum IrcError {
     #[error("the server never sent 001 (registration)")]
     NoRegistration,
 
+    #[error("the nickname {nick} is already in use")]
+    NickInUse { nick: String },
+
     #[error("the server answered the capability request with a NAK: {caps}")]
     CapNak { caps: String },
 
@@ -565,9 +568,24 @@ impl IrcConnection {
         self.send("CAP END").await?;
 
         // wait for 001.
-        self.wait_for(|m| m.command == "001")
+        //
+        // --- WHY THE 433 IS CHECKED ---
+        // `433 ERR_NICKNAMEINUSE` means the nickname is taken. that
+        // is PERMANENT until the nick changes — retrying forever will
+        // never succeed, and the old code sat in a reconnect loop
+        // with a misleading "the server never sent 001" message.
+        //
+        // so the 433 is caught and reported as what it is.
+        let registration = self
+            .wait_for(|m| m.command == "001" || m.command == "433")
             .await
             .map_err(|_| IrcError::NoRegistration)?;
+
+        if registration.command == "433" {
+            return Err(IrcError::NickInUse {
+                nick: self.options.nick.clone(),
+            });
+        }
 
         // wait for the welcome burst to finish, so a caller that takes
         // a snapshot of the messages right after connecting does not
