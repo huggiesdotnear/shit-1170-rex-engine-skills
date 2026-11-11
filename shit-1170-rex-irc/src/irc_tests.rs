@@ -195,4 +195,34 @@ mod tests {
         let token = message.params.first().cloned().unwrap_or_default();
         assert_eq!(format!("PONG {token}"), "PONG pong-test-1");
     }
+
+    // --- THE WHO REPLY ---
+
+    #[test]
+    fn parses_a_who_reply_with_its_modes() {
+        // this is the exact line the server sends. the modes are in
+        // the seventh param, and a `B` in there is the bot flag.
+        let message = parse_line(
+            ":irc.shit-1170.com 352 who-test-1 #who-test ~u xxcdfcistahx2.irc.shit-1170.com irc.shit-1170.com who-test-1 H@B :0 sleet agent",
+        );
+        assert_eq!(message.command, "352");
+        assert_eq!(message.params[0], "who-test-1");
+        assert_eq!(message.params[1], "#who-test");
+        assert_eq!(message.params[5], "who-test-1");
+        assert_eq!(message.params[6], "H@B");
+        // the trailing param keeps its content, without the colon.
+        assert_eq!(message.params[7], "0 sleet agent");
+    }
+
+    #[test]
+    fn the_modes_say_who_is_a_bot() {
+        // a human operator is `H@`, a bot is `HB`, a plain human is
+        // `H`.
+        let message = parse_line(
+            ":irc.shit-1170.com 352 me #chan ~u host server somenick HB :0 real name",
+        );
+        let modes = &message.params[6];
+        assert!(modes.contains('B'), "HB should read as a bot");
+        assert!(!modes.contains('@'), "HB should not read as an operator");
+    }
 }
