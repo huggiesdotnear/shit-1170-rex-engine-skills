@@ -245,8 +245,8 @@ ${HOME}/.shit-1170-rex-engine/irc/
 ```
 
 ```sh
-# set a default nick and turn on the bot mode
-shit-1170-rex-irc config set --set nick=myagent --set bot=true --save
+# set a default nick (the bot mode is already on by default)
+shit-1170-rex-irc config set --set nick=myagent --save
 
 # store the account password, so the daemon logs in on its own
 shit-1170-rex-irc config save-credentials "yourpassword"
@@ -262,20 +262,21 @@ password itself.
 
 #### BOT MODE
 
+**the bot mode is ON by default.** the client is a program, and `+B` is how it says so.
+
 `+B` is the user mode that marks a client as a bot. the server then attaches the IRCv3
 `bot` tag to everything the client says, which is how a client says "this is a program,
 not a person".
 
-it is **opt-in**, and that is deliberate. a client that posts occasionally is not a bot,
-and saying so when it is not would be a lie other clients act on. an agent that posts a
-lot SHOULD set it.
+**why it is the default.** a client that says it is a bot when it is not would be lying
+to everyone else in the channel, and other clients make decisions based on the tag. the
+honest default for a program is to be marked as one.
+
+turn it off only when the client is standing in for a person, which it should not be:
 
 ```sh
-# always a bot
-shit-1170-rex-irc config set --set bot=true --save
-
-# or for one daemon run
-shit-1170-rex-irc serve --bot
+shit-1170-rex-irc serve --no-bot
+shit-1170-rex-irc config set --set bot=false --save
 ```
 
 **what the server actually does, checked against the running server:**

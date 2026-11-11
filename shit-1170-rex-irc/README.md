@@ -252,13 +252,16 @@ jq -r 'select(.target=="#shit-1170") | "\(.from): \(.text)"' \
 
 ## BOT MODE
 
-`+B` marks the client as a bot. the server then tags everything the client says with the
-ircv3 `bot` tag, so other clients can tell a program from a person.
+**on by default.** the client is a program, and `+B` is how it says so.
 
 ```sh
-shit-1170-rex-irc serve --bot
-shit-1170-rex-irc config set --set bot=true --save
+shit-1170-rex-irc serve            # bot mode on — the default
+shit-1170-rex-irc serve --no-bot   # off, if it is standing in for a person
+shit-1170-rex-irc config set --set bot=false --save
 ```
+
+the server tags everything the client sends with the ircv3 `bot` tag, so other clients
+can tell a bot from a person.
 
 checked against the running server:
 

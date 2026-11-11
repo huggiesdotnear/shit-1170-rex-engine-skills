@@ -66,9 +66,16 @@ enum Command {
         /// the sasl account password.
         #[arg(long)]
         sasl_pass: Option<String>,
-        /// set the +B bot mode.
+        /// set the +B bot mode. this is the default already.
         #[arg(long)]
         bot: bool,
+        /// do NOT set the +B bot mode.
+        ///
+        /// the client is a program and the bot mode is how it says
+        /// so. only turn it off if the client is standing in for a
+        /// person, which it should not be.
+        #[arg(long)]
+        no_bot: bool,
         /// connect without tls.
         #[arg(long)]
         no_tls: bool,
@@ -273,6 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             sasl_user,
             sasl_pass,
             bot,
+            no_bot,
             no_tls,
             join,
             api_port,
@@ -301,7 +309,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .or_else(|| stored.as_ref().map(|_| nick.clone())),
                 sasl_pass: sasl_pass.or_else(|| stored.map(|c| c.password)),
                 timeout_ms: 20_000,
-                bot: bot || config.bot,
+                bot: bot || (config.bot && !no_bot),
                 channels: channels.clone(),
             };
             options.channels = channels;

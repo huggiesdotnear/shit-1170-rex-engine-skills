@@ -86,4 +86,16 @@ mod tests {
         let session = session();
         assert_eq!(session.options.nick, "sleet-agent");
     }
+
+    #[test]
+    fn the_bot_mode_is_on_by_default() {
+        // the client is a program, and the `+B` mode is how it says
+        // so. a client that says it is a bot when it is not would be
+        // lying to everyone else in the channel.
+        //
+        // this test is here so the default cannot be flipped by
+        // accident without someone noticing and changing this too.
+        let config = crate::store::IrcConfig::default();
+        assert!(config.bot, "the bot mode should be the default");
+    }
 }

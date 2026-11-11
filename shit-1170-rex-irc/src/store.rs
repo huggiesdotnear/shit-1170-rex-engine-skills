@@ -85,6 +85,14 @@ pub struct IrcConfig {
     /// use tls (wss).
     pub tls: bool,
     /// set the +B bot mode on connect.
+    ///
+    /// this is ON by default. the client is a program, and the `+B`
+    /// mode is how it says so — the server tags everything the client
+    /// sends with the ircv3 `bot` tag, so other clients can tell a
+    /// bot from a person.
+    ///
+    /// a client that says it is a bot when it is not would be lying to
+    /// everyone else in the channel, so the default is the honest one.
     pub bot: bool,
 }
 
@@ -97,7 +105,7 @@ impl Default for IrcConfig {
             realname: "sleet agent".to_string(),
             channels: vec!["#shit-1170".to_string()],
             tls: true,
-            bot: false,
+            bot: true,
         }
     }
 }
