@@ -109,6 +109,12 @@ async fn status(State(session): State_) -> impl IntoResponse {
         "isupport": connection.isupport,
         "numerics": numerics(&connection),
         "cursor": session.seq.load(std::sync::atomic::Ordering::SeqCst),
+        // --- THE CONNECTION HEALTH ---
+        // a rising reconnect count means the socket is dropping, which
+        // is the first thing to look at when a conversation keeps
+        // stalling.
+        "reconnects": session.reconnects.load(std::sync::atomic::Ordering::Relaxed),
+        "uptime_seconds": session.uptime_seconds().await,
     }))
 }
 

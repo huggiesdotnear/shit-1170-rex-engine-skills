@@ -59,6 +59,13 @@ pub struct Session {
     pub last_msgid: Mutex<Option<String>>,
     /// whether the connection is up.
     pub connected: Arc<AtomicU64>,
+    /// how many times the connection has been re-established.
+    ///
+    /// this is the number an agent looks at when a conversation keeps
+    /// stalling — a rising count means the socket is dropping.
+    pub reconnects: AtomicU64,
+    /// when the connection came up, as a unix timestamp in seconds.
+    pub connected_at: Mutex<Option<u64>>,
     /// the channel the read loop takes commands from.
     ///
     /// the read loop owns the socket, so it is the only thing that may
@@ -79,8 +86,28 @@ impl Session {
             tx,
             last_msgid: Mutex::new(None),
             connected: Arc::new(AtomicU64::new(0)),
+            reconnects: AtomicU64::new(0),
+            connected_at: Mutex::new(None),
             commands: Mutex::new(None),
         })
+    }
+
+    /// record that the connection came up.
+    pub async fn mark_connected(&self) {
+        self.connected.store(1, Ordering::Relaxed);
+        let mut guard = self.connected_at.lock().await;
+        *guard = Some(now_seconds());
+    }
+
+    /// record that the connection went down.
+    pub fn mark_disconnected(&self) {
+        self.connected.store(0, Ordering::Relaxed);
+    }
+
+    /// how long the connection has been up, in seconds.
+    pub async fn uptime_seconds(&self) -> Option<u64> {
+        let guard = self.connected_at.lock().await;
+        guard.map(|at| now_seconds().saturating_sub(at))
     }
 
     /// give the read loop's command channel to the session.
@@ -177,6 +204,14 @@ impl Session {
     pub async fn head(&self) -> u64 {
         self.seq.load(Ordering::SeqCst)
     }
+}
+
+/// the seconds since the unix epoch.
+pub fn now_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// a websocket read error that is really just a closed socket.

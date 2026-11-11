@@ -97,7 +97,7 @@ pub async fn run(session: Arc<Session>) {
             let mut connection = session.connection.lock().await;
             match connection.connect().await {
                 Ok(()) => {
-                    session.connected.store(1, Ordering::Relaxed);
+                    session.mark_connected().await;
                     backoff = BACKOFF_MIN;
                     tracing::info!(
                         server = %connection.options.server,
@@ -107,7 +107,7 @@ pub async fn run(session: Arc<Session>) {
                     true
                 }
                 Err(err) => {
-                    session.connected.store(0, Ordering::Relaxed);
+                    session.mark_disconnected();
                     tracing::warn!(%err, "connect failed, retrying");
                     false
                 }
@@ -119,6 +119,10 @@ pub async fn run(session: Arc<Session>) {
             backoff = (backoff * 2).min(BACKOFF_MAX);
             continue;
         }
+
+        // count the reconnects, so a stalling conversation can be
+        // traced to a dropping socket.
+        session.reconnects.fetch_add(1, Ordering::Relaxed);
 
         // after a reconnect, ask for what was missed while the socket
         // was down.
@@ -173,7 +177,7 @@ pub async fn run(session: Arc<Session>) {
             }
         }
 
-        session.connected.store(0, Ordering::Relaxed);
+        session.mark_disconnected();
         session.clear_sender().await;
         tracing::info!("connection lost, reconnecting");
         sleep(backoff).await;
