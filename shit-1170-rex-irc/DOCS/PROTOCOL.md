@@ -170,6 +170,24 @@ the client has to wait for `001`. the `send` bin registers first, then joins, th
 - the one oper is `admin`, with the `server-admin` class
 - **no persistent data** — the datastore lives in the container's writable layer
 
+### the bot mode
+
+a client is a bot when it has the `+B` user mode. `Bot` is in ergo's
+`SupportedUserModes`, so a client can set it on itself:
+
+```
+MODE <nick> +B
+```
+
+the server then attaches the IRCv3 `bot` tag to everything that client says:
+
+```
+@bot;time=2026-11-11T16:12:12.566Z;msgid=... :myagent!~u@... PRIVMSG #shit-1170 :hi
+```
+
+the tag only goes on messages the client sends, and only when the client has the
+`message-tags` capability — which this skill negotiates.
+
 ### the origin check
 
 ergo rejects a websocket connection whose `Origin` header is not in

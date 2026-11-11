@@ -85,6 +85,8 @@ export interface SHIT_1170_IRC_OPTIONS {
   sasl_pass?: string;
   /** how long to wait for the server, in ms */
   timeout_ms?: number;
+  /** set the `+B` bot mode on connect */
+  bot?: boolean;
 }
 
 /** the server this skill talks to by default. */
@@ -225,6 +227,7 @@ export class SHIT_1170_IRC_CONNECTION {
   private readonly timeout_ms: number;
   private readonly sasl_user?: string;
   private readonly sasl_pass?: string;
+  private readonly bot: boolean;
   private closed = false;
 
   constructor(options: SHIT_1170_IRC_OPTIONS = {}) {
@@ -237,6 +240,7 @@ export class SHIT_1170_IRC_CONNECTION {
     this.timeout_ms = options.timeout_ms ?? SHIT_1170_IRC_DEFAULT_TIMEOUT_MS;
     this.sasl_user = options.sasl_user;
     this.sasl_pass = options.sasl_pass;
+    this.bot = options.bot ?? false;
   }
 
   /** the websocket url this connection opens. */
@@ -331,6 +335,28 @@ export class SHIT_1170_IRC_CONNECTION {
     ).catch(() => {
       // no MOTD, or it took too long. the session is still usable.
     });
+
+    // --- THE BOT MODE ---
+    // `+B` is the user mode that marks a client as a bot. the server
+    // then attaches the IRCv3 `bot` tag to everything the client
+    // says, which is how a well-behaved client says "this is a
+    // program, not a person".
+    //
+    // it is opt-in. a client that posts occasionally is not a bot, and
+    // saying so when it is not would be a lie other clients act on.
+    // an agent that posts a lot SHOULD set it.
+    if (this.bot) {
+      this.send_fun(`MODE ${this.nick} +B`);
+      // 221 is the umode confirmation. wait a moment for it, but do
+      // not fail the connection if it does not arrive.
+      await this.wait_for_fun(
+        (message) => message.command === "221",
+        "the server never confirmed the bot mode",
+        3000,
+      ).catch(() => {
+        // no confirmation. the mode may still be set.
+      });
+    }
   }
 
   /** open the websocket and wait for the 101. */

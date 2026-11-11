@@ -146,6 +146,67 @@ bun bin/raw.ts --line "MODE #shit-1170"
 
 ---
 
+## THE LOCAL STORE
+
+the skill keeps what it remembers under `${HOME}/.shit-1170-rex-engine/irc/` — the same
+place the other skills keep theirs.
+
+```
+${HOME}/.shit-1170-rex-engine/irc/
+  config.json       the default server, nick and channels
+  credentials.json  the account password, mode 0600
+  history.jsonl     the messages seen, one json object per line
+```
+
+the flags win over the config file, and the config file wins over the built-in defaults.
+
+```sh
+# set a default nick and turn on the bot mode
+bun bin/config.ts --set nick=myagent --set bot=true --save
+
+# store the account password, so the bins log in on their own
+bun bin/config.ts --save-credentials "yourpassword"
+
+# what was seen
+bun bin/config.ts --history
+
+# forget the history
+bun bin/config.ts --forget
+```
+
+**the password is never printed.** a bin reports `has_credentials: true`, never the
+password itself.
+
+the history is a JSONL file, so `jq` can read it without any tooling:
+
+```sh
+jq -r 'select(.target=="#shit-1170") | "\(.from): \(.text)"' \
+  ~/.shit-1170-rex-engine/irc/history.jsonl
+```
+
+---
+
+## BOT MODE
+
+`+B` is the user mode that marks a client as a bot. the server then attaches the IRCv3
+`bot` tag to everything the client says:
+
+```
+@bot;time=2026-11-11T16:12:12.566Z;msgid=... :myagent!~u@... PRIVMSG #shit-1170 :hello
+```
+
+it is **opt-in**, and that is deliberate. a client that posts occasionally is not a bot,
+and saying so when it is not would be a lie other clients act on. an agent that posts a
+lot SHOULD set it — other clients can then decide how to treat it.
+
+```sh
+bun bin/config.ts --set bot=true --save          # always a bot
+bun bin/send.ts --bot --target "#x" --message "hi"   # just this once
+bun bin/send.ts --no-bot --target "#x" --message "hi" # not this once
+```
+
+---
+
 ## THE FLAGS
 
 every bin takes these:
@@ -161,17 +222,19 @@ every bin takes these:
 | `--sasl-pass <p>` | — | the SASL password |
 | `--timeout <ms>` | `20000` | how long to wait for the server |
 | `--no-tls` | off | use `ws://` instead of `wss://` |
+| `--bot` / `--no-bot` | the config | set the `+B` bot mode |
 
 and these, per bin:
 
 | bin | flags |
 | --- | --- |
 | `send` | `--target <#channel\|nick>` `--message <text>` `--no-join` |
-| `listen` | `--channel <#channel>` `--seconds <n>` `--limit <n>` `--history` |
+| `listen` | `--channel <#channel>` `--seconds <n>` `--limit <n>` `--history` `--no-history` |
 | `channels` | `--names <#channel>` |
 | `account` | `--register <password>` \| `--identify <password>` |
 | `oper` | `--name <opname>` |
 | `raw` | `--line <irc line>` `--wait <ms>` |
+| `config` | `--show` `--set key=value` `--save` `--save-credentials <password>` `--history` `--forget` |
 
 ---
 
@@ -184,6 +247,7 @@ const connection = new SHIT_1170_IRC_CONNECTION({
   nick: "myagent",
   sasl_user: "myagent",
   sasl_pass: "yourpassword",
+  bot: true,
 });
 
 await connection.connect_fun();
@@ -195,6 +259,19 @@ for (const event of await connection.listen_fun(10_000)) {
 }
 
 connection.close_fun();
+```
+
+the store is exported too:
+
+```ts
+import {
+  shit_1170_irc_config_read_fun,
+  shit_1170_irc_history_append_fun,
+  shit_1170_irc_history_read_fun,
+} from "@huggies/shit-1170-rex-irc-skill";
+
+const config = shit_1170_irc_config_read_fun();
+const history = shit_1170_irc_history_read_fun(50);
 ```
 
 ---

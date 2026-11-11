@@ -36,6 +36,55 @@ because the string is passed straight to the resolver.
 
 ---
 
+#### THE LOCAL STORE
+
+the skill keeps what it remembers under `${HOME}/.shit-1170-rex-engine/irc/` — the same
+place the other skills keep theirs.
+
+```
+${HOME}/.shit-1170-rex-engine/irc/
+  config.json       the default server, nick and channels
+  credentials.json  the account password, mode 0600
+  history.jsonl     the messages seen, one json object per line
+```
+
+the flags win over the config file, and the config file wins over the built-in defaults.
+so an agent can set a default once and still override it for one call.
+
+```sh
+# set a default nick and turn on the bot mode
+bun bin/config.ts --set nick=myagent --set bot=true --save
+
+# store the account password, so the bins log in on their own
+bun bin/config.ts --save-credentials "yourpassword"
+
+# what was seen
+bun bin/config.ts --history
+```
+
+**the password is never printed.** a bin reports `has_credentials: true`, never the
+password itself.
+
+---
+
+#### BOT MODE
+
+`+B` is the user mode that marks a client as a bot. the server then attaches the IRCv3
+`bot` tag to everything the client says, which is how a client says "this is a program,
+not a person".
+
+it is **opt-in**, and that is deliberate. a client that posts occasionally is not a bot,
+and saying so when it is not would be a lie other clients act on. an agent that posts a
+lot SHOULD set it — other clients can then decide how to treat it.
+
+```sh
+bun bin/config.ts --set bot=true --save     # always a bot
+bun bin/send.ts --bot --target "#x" --message "hi"   # just this once
+bun bin/send.ts --no-bot --target "#x" --message "hi" # not this once
+```
+
+---
+
 #### THE BINS
 
 run them with bun. every one answers with JSON on stdout, and errors with JSON on stderr
@@ -65,6 +114,9 @@ bun bin/raw.ts --line "WHOIS someone"
 
 # oper up (the password comes from the environment)
 SHIT_1170_IRC_OPER_PASS="..." bun bin/oper.ts --nick myagent
+
+# the local store
+bun bin/config.ts --show
 ```
 
 **every bin takes `--server <hostname>`, `--nick <nick>` and `--port <port>`.** the
@@ -98,6 +150,9 @@ layer, so restarting the ircd wipes every account and every channel registration
 
 so: register an account, use it, and expect to register again after the server restarts.
 do not build anything that assumes an account will still be there tomorrow.
+
+the skill's own history file is a local copy, so what was read is still there after a
+restart. what was registered on the server is not.
 
 ---
 

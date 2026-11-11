@@ -18,16 +18,21 @@ import {
   args_string_fun,
   parse_args_fun,
   print_error_fun,
+  shit_1170_irc_run_fun,
+  sleep_fun,
 } from "../src/bin_stuff";
-import { shit_1170_irc_run_fun, sleep_fun } from "../src/bin_stuff";
+import {
+  shit_1170_irc_history_append_fun,
+  type SHIT_1170_IRC_HISTORY_ENTRY,
+} from "../src/store";
 
 async function main_fun(): Promise<void> {
   const args = parse_args_fun(process.argv.slice(2), {
-    boolean_flags: ["help", "no-tls", "history"],
+    boolean_flags: ["help", "no-tls", "history", "no-history"],
   });
   if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
     print_error_fun(
-      "listen [--channel <#channel>] [--history] [--seconds <n>] [--limit <n>] [--server <host>] [--nick <nick>]",
+      "listen [--channel <#channel>] [--history] [--seconds <n>] [--limit <n>] [--no-history] [--server <host>] [--nick <nick>]",
     );
     return;
   }
@@ -72,11 +77,41 @@ async function main_fun(): Promise<void> {
       }
     }
 
+    // --- THE HISTORY ---
+    // what was heard is written to the local store, so an agent that
+    // read a channel can look at it again without listening twice.
+    // the ircd keeps messages in memory only, and forgets everything
+    // when it restarts — so this copy is the only one that lasts.
+    const entries: SHIT_1170_IRC_HISTORY_ENTRY[] = [];
+    for (const event of events) {
+      if (typeof event !== "object" || event === null) continue;
+      const item = event as {
+        type?: string;
+        from?: string | null;
+        target?: string | null;
+        text?: string | null;
+        raw?: string;
+      };
+      if (item.type !== "message" && item.type !== "notice") continue;
+      const msgid = item.raw?.match(/msgid=([^;\s]+)/)?.[1];
+      entries.push({
+        at: new Date().toISOString(),
+        target: item.target ?? channel,
+        from: item.from ?? null,
+        text: item.text ?? null,
+        ...(msgid ? { msgid } : {}),
+      });
+    }
+    if (entries.length > 0 && !args_bool_fun(args, "no-history")) {
+      shit_1170_irc_history_append_fun(entries);
+    }
+
     return {
       ok: true,
       channel,
       seconds,
       count: events.length,
+      saved_to_history: entries.length,
       events: events.slice(0, limit),
     };
   });
