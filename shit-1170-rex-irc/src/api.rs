@@ -342,6 +342,9 @@ struct MessagesQuery {
     /// only events for this channel.
     #[serde(default)]
     target: Option<String>,
+    /// only events from this nick.
+    #[serde(default)]
+    from: Option<String>,
 }
 
 async fn messages(
@@ -367,6 +370,18 @@ async fn messages(
                     .target
                     .as_ref()
                     .map(|t| t.to_lowercase() == want)
+                    .unwrap_or(false);
+                if !have {
+                    return false;
+                }
+            }
+            if let Some(from) = &query.from {
+                let want = from.to_lowercase();
+                let have = entry
+                    .event
+                    .from
+                    .as_ref()
+                    .map(|f| f.to_lowercase() == want)
                     .unwrap_or(false);
                 if !have {
                     return false;

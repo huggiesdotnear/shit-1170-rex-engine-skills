@@ -127,6 +127,58 @@ enum Command {
         #[arg(long, default_value = "8787")]
         api_port: u16,
     },
+    /// send any irc line. the escape hatch.
+    Raw {
+        /// the line to send.
+        #[arg(long)]
+        line: String,
+        /// how long to wait for the server's answer.
+        #[arg(long, default_value_t = 800)]
+        wait_ms: u64,
+        /// the port the daemon listens on.
+        #[arg(long, default_value = "8787")]
+        api_port: u16,
+    },
+    /// wait for a message to arrive.
+    ///
+    /// this blocks until something comes in, so the agent does not
+    /// have to poll. it is the difference between a sleep-and-read
+    /// loop and one call.
+    Wait {
+        /// how long to wait, in seconds.
+        #[arg(long, default_value_t = 30)]
+        seconds: u64,
+        /// only messages from this nick.
+        #[arg(long)]
+        from: Option<String>,
+        /// only messages for this channel.
+        #[arg(long)]
+        target: Option<String>,
+        /// only messages of this kind.
+        #[arg(long)]
+        kind: Option<String>,
+        /// the cursor to start from. the last cursor, to not miss any.
+        #[arg(long, default_value_t = 0)]
+        since: u64,
+        /// the port the daemon listens on.
+        #[arg(long, default_value = "8787")]
+        api_port: u16,
+    },
+    /// the server's own history for a channel.
+    History {
+        /// the channel.
+        #[arg(long)]
+        channel: String,
+        /// how many messages.
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        /// only messages after this msgid.
+        #[arg(long)]
+        after: Option<String>,
+        /// the port the daemon listens on.
+        #[arg(long, default_value = "8787")]
+        api_port: u16,
+    },
     /// stream the messages as they arrive.
     Watch {
         /// the port the daemon listens on.
@@ -295,6 +347,95 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Part { channel, api_port } => {
             let body = json!({ "channel": channel });
             let answer = post(&api_url(api_port), "/part", &body).await?;
+            println!("{}", serde_json::to_string_pretty(&answer)?);
+        }
+
+        Command::Raw {
+            line,
+            wait_ms,
+            api_port,
+        } => {
+            let body = json!({ "line": line, "wait_ms": wait_ms });
+            let answer = post(&api_url(api_port), "/raw", &body).await?;
+            println!("{}", serde_json::to_string_pretty(&answer)?);
+        }
+
+        Command::Wait {
+            seconds,
+            from,
+            target,
+            kind,
+            since,
+            api_port,
+        } => {
+            // --- WHY THIS POLLS INSTEAD OF STREAMING ---
+            // the daemon has a live stream at /stream, but a stream
+            // does not end: it holds the connection open forever. the
+            // agent wants "the next message", which has a natural end.
+            //
+            // so this polls the daemon's cursor endpoint and returns
+            // as soon as something matches. the wait happens HERE,
+            // not in the agent, so the agent makes one call instead of
+            // a sleep-and-read loop.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+            let mut cursor = since;
+            let mut found: Vec<serde_json::Value> = Vec::new();
+
+            while std::time::Instant::now() < deadline {
+                let mut query = format!("?since={cursor}&limit=100");
+                if let Some(kind) = &kind {
+                    query.push_str(&format!("&kind={}", urlencode(kind)));
+                }
+                if let Some(target) = &target {
+                    query.push_str(&format!("&target={}", urlencode(target)));
+                }
+                if let Some(from) = &from {
+                    query.push_str(&format!("&from={}", urlencode(from)));
+                }
+
+                let answer = get(&api_url(api_port), &format!("/messages{query}")).await?;
+                let messages = answer
+                    .get("messages")
+                    .and_then(|m| m.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+
+                if !messages.is_empty() {
+                    found = messages;
+                    break;
+                }
+
+                // keep the cursor current so a slow message is not
+                // missed between polls.
+                if let Some(head) = answer.get("cursor").and_then(|c| c.as_u64()) {
+                    cursor = head;
+                }
+
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "ok": true,
+                    "waited_seconds": seconds,
+                    "count": found.len(),
+                    "messages": found,
+                }))?
+            );
+        }
+
+        Command::History {
+            channel,
+            limit,
+            after,
+            api_port,
+        } => {
+            let mut query = format!("?channel={}&limit={limit}", urlencode(&channel));
+            if let Some(after) = after {
+                query.push_str(&format!("&after={}", urlencode(&after)));
+            }
+            let answer = get(&api_url(api_port), &format!("/history{query}")).await?;
             println!("{}", serde_json::to_string_pretty(&answer)?);
         }
 
