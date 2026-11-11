@@ -43,6 +43,14 @@ pub const DEFAULT_NICK: &str = "sleet-agent";
 /// how long to wait for the server by default.
 pub const DEFAULT_TIMEOUT_MS: u64 = 20_000;
 
+/// how many messages the raw traffic buffer keeps.
+///
+/// the session's log is the one that matters — it holds the events
+/// with their sequence numbers. this is the raw line history, and it
+/// only needs to cover a recent window for the replies to a command
+/// and the numerics.
+pub const MESSAGE_HISTORY_CAPACITY: usize = 5000;
+
 /// how often to send a PING of our own, in seconds.
 ///
 /// the ircd pings us at 90 seconds. a client that only ever answers
@@ -218,11 +226,17 @@ pub fn to_event(message: &IrcMessage) -> Option<IrcEvent> {
         _ => return None,
     };
 
-    // for JOIN and PART the channel is the first param, and there is
-    // no text. for NICK the new nick is the first param.
+    // --- THE TARGET ---
+    // for JOIN and PART the channel is the first param. for NICK it
+    // is the new nick. for PRIVMSG and NOTICE it is the channel or
+    // the nick the message went to.
+    //
+    // for QUIT there is NO target. the quit reason is in the first
+    // param, and it is not a channel — treating it as one polluted
+    // the `--target` filter, where a `wait --target "connection
+    // closed"` would match every quit.
     let target = match kind {
-        "join" | "part" => message.params.first().cloned(),
-        "nick" => message.params.first().cloned(),
+        "quit" => None,
         _ => message.params.first().cloned(),
     };
 
@@ -240,8 +254,11 @@ pub fn to_event(message: &IrcMessage) -> Option<IrcEvent> {
             .map(|t| !t.starts_with('#'))
             .unwrap_or(false);
 
+    // the quit reason is the text. for the others the text is the
+    // last param.
     let text = match kind {
         "join" | "nick" | "ping" | "pong" => None,
+        "quit" => message.params.first().cloned(),
         _ => text,
     };
 
@@ -419,6 +436,10 @@ pub struct IrcConnection {
     /// the options this connection was built with.
     pub options: IrcOptions,
     /// every message the server has sent, in order.
+    ///
+    /// this is bounded. it is the raw traffic, and the session's own
+    /// log is the one that matters — this is here for the replies to
+    /// a command, and for the numerics.
     pub messages: Vec<IrcMessage>,
     /// the numerics and events, flattened for output.
     pub events: Vec<IrcEvent>,
@@ -786,9 +807,17 @@ impl IrcConnection {
     /// read the next message off the wire.
     pub async fn read_message(&mut self) -> IrcResult<IrcMessage> {
         use futures_util::StreamExt;
-        let socket = self.socket.as_mut().ok_or(IrcError::NotOpen)?;
 
-        loop {
+        // --- THE LINES ARE COLLECTED FIRST ---
+        // the socket borrow has to end before `on_data` can be called,
+        // because `on_data` may send — and sending needs the socket.
+        //
+        // this also means every line in a frame is handled, not just
+        // the first. ergo sends one irc line per frame so it does not
+        // happen today, but the frame is a text payload and could
+        // hold more than one.
+        let lines: Vec<IrcMessage> = loop {
+            let socket = self.socket.as_mut().ok_or(IrcError::NotOpen)?;
             let next = socket.next().await;
             let Some(next) = next else {
                 self.closed = true;
@@ -812,15 +841,17 @@ impl IrcConnection {
                         _ => continue,
                     };
 
-                    for line in text.split('\n') {
-                        let line = line.trim_end_matches('\r');
-                        if line.is_empty() {
-                            continue;
-                        }
-                        let parsed = parse_line(line);
-                        self.on_data(&parsed).await;
-                        return Ok(parsed);
+                    let parsed: Vec<IrcMessage> = text
+                        .split('\n')
+                        .map(|line| line.trim_end_matches('\r'))
+                        .filter(|line| !line.is_empty())
+                        .map(parse_line)
+                        .collect();
+
+                    if parsed.is_empty() {
+                        continue;
                     }
+                    break parsed;
                 }
                 Err(err) => {
                     self.closed = true;
@@ -830,7 +861,17 @@ impl IrcConnection {
                     });
                 }
             }
+        };
+
+        // now the socket is free, so each line can be handled.
+        let mut first: Option<IrcMessage> = None;
+        for parsed in lines {
+            self.on_data(&parsed).await;
+            if first.is_none() {
+                first = Some(parsed);
+            }
         }
+        first.ok_or(IrcError::NotOpen)
     }
 
     /// handle one raw line from the server.
@@ -839,6 +880,21 @@ impl IrcConnection {
     /// has to be answered with a PONG, and sending is async.
     async fn on_data(&mut self, message: &IrcMessage) {
         self.messages.push(message.clone());
+
+        // --- THE RAW TRAFFIC IS BOUNDED ---
+        // this vector held every line the server ever sent, for the
+        // life of the daemon. on a long-lived connection that is
+        // unbounded memory, and every `/status` and `/channels` call
+        // rescanned all of it.
+        //
+        // the session's own log is the one that matters — it holds
+        // the events, with their sequence numbers. this is here for
+        // the replies to a command, and the numerics. so it only
+        // needs to hold a recent window.
+        if self.messages.len() > MESSAGE_HISTORY_CAPACITY {
+            let overflow = self.messages.len() - MESSAGE_HISTORY_CAPACITY;
+            self.messages.drain(0..overflow);
+        }
 
         // ISUPPORT (005) carries the server's capabilities.
         if message.command == "005" {

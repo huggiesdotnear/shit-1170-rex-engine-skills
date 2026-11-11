@@ -142,10 +142,6 @@ pub async fn run(session: Arc<Session>) {
         // traced to a dropping socket.
         session.reconnects.fetch_add(1, Ordering::Relaxed);
 
-        // after a reconnect, ask for what was missed while the socket
-        // was down.
-        gap_fill(&session).await;
-
         // --- THE COMMAND LOOP ---
         // the read loop owns the socket, so it also serves the
         // commands. it does the reading and the writing in one place,
@@ -161,6 +157,14 @@ pub async fn run(session: Arc<Session>) {
                 tracing::warn!(%err, channel = %channel, "could not join");
             }
         }
+
+        // after a reconnect, ask for what was missed while the socket
+        // was down.
+        //
+        // this runs AFTER the re-join, because the gap fill asks
+        // about channels we are in — and right after a drop we are in
+        // none of them until we join.
+        gap_fill(&session).await;
 
         loop {
             // wait for either a command or an incoming message.
@@ -502,12 +506,29 @@ async fn do_part(
     }
 }
 
+/// how many channels to gap-fill at once.
+///
+/// a client that joined a lot of channels asks a lot of questions, and
+/// the server answers each one. this keeps that bounded.
+const GAP_FILL_CHANNEL_CAP: usize = 20;
+
 /// ask the server for the messages that arrived while the socket was
 /// down.
 ///
 /// the ircd keeps the last 1000 messages per channel, so this covers
 /// a reconnect that was not too long. it is a best effort: if the
 /// request fails, the agent simply misses that window.
+///
+/// --- WHY ONLY THE CHANNELS WE ARE IN ---
+/// asking about a channel we are not in gets `FAIL CHATHISTORY
+/// INVALID_TARGET` from the server. and the server answers every
+/// request, so asking about a hundred channels means a hundred
+/// failures and a hundred replies to sort through.
+///
+/// --- WHY THE BATCH IS WAITED FOR, NOT SLEPT ON ---
+/// a fixed sleep truncates the batch on a slow server. the server
+/// says when the batch is finished with `BATCH -N`, so we wait for
+/// that.
 async fn gap_fill(session: &Arc<Session>) {
     let msgid = session.last_msgid.lock().await.clone();
     let Some(msgid) = msgid else {
@@ -522,6 +543,10 @@ async fn gap_fill(session: &Arc<Session>) {
     if channels.is_empty() {
         return;
     }
+    let channels: Vec<String> = channels
+        .into_iter()
+        .take(GAP_FILL_CHANNEL_CAP)
+        .collect();
 
     {
         let mut connection = session.connection.lock().await;
@@ -535,9 +560,28 @@ async fn gap_fill(session: &Arc<Session>) {
         }
     }
 
-    // the server answers with a batch. give it a moment, then take
-    // whatever came back.
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    // wait for the batches to close, rather than sleeping for a guess.
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(4000);
+    loop {
+        let closed = {
+            let connection = session.connection.lock().await;
+            connection
+                .messages
+                .iter()
+                .filter(|m| m.command == "BATCH" && m.params.get(1) == Some(&"-".to_string()))
+                .count()
+        };
+        if closed >= channels.len() {
+            break;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            tracing::debug!(
+                "the gap fill batches did not all close in time — taking what arrived"
+            );
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     let batch: Vec<IrcMessage> = {
         let connection = session.connection.lock().await;
