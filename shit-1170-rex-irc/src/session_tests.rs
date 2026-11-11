@@ -116,4 +116,57 @@ mod tests {
             "the library default and the config default must agree"
         );
     }
+
+    // --- THE CHANNEL LIST AFTER A DROP ---
+
+    #[tokio::test]
+    async fn forgetting_the_channels_clears_the_list() {
+        // when the socket dies, the server forgets us too. the list
+        // has to be cleared, or the reconnect thinks it is still in
+        // the channels and skips the JOIN — and the client ends up
+        // believing it is in a channel it is not in.
+        let session = session();
+        {
+            let mut connection = session.connection.lock().await;
+            connection.channels.push("#somewhere".to_string());
+            assert_eq!(connection.channels.len(), 1);
+            connection.forget_channels();
+        }
+        let connection = session.connection.lock().await;
+        assert!(
+            connection.channels.is_empty(),
+            "the channel list should be empty after a drop"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_cursor_covers_everything_that_was_recorded() {
+        // the cursor is what a caller advances. it has to cover every
+        // event, or a message is skipped for good.
+        let session = session();
+        for i in 0..50 {
+            session
+                .record(event_from("noisy-peer", &format!("noise {i}")))
+                .await;
+        }
+        assert_eq!(session.head().await, 50);
+
+        // every event is reachable from the start.
+        let all = session.since(0, 1000).await;
+        assert_eq!(all.len(), 50);
+        assert_eq!(all[49].seq, 50);
+
+        // and walking the cursor covers them all, with no gaps.
+        let mut cursor = 0;
+        let mut seen = 0;
+        loop {
+            let batch = session.since(cursor, 10).await;
+            if batch.is_empty() {
+                break;
+            }
+            seen += batch.len();
+            cursor = batch[batch.len() - 1].seq;
+        }
+        assert_eq!(seen, 50, "walking the cursor missed some events");
+    }
 }

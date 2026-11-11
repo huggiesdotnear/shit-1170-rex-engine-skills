@@ -379,6 +379,29 @@ async fn send(
     let refused = error_numeric.is_some();
     let delivered = !refused;
 
+    // --- THE 403 SELF-HEAL ---
+    // `403 ERR_NOSUCHCHANNEL` means the server does not have that
+    // channel, or we are not in it. either way, the client believes it
+    // is in a channel it is not in — so the belief is dropped, and
+    // the next send joins it properly.
+    //
+    // this is what recovers a client whose channel list went stale.
+    if let Some(numeric) = &error_numeric
+        && numeric.command == "403"
+            && let Some(channel) = numeric.params.get(1)
+        {
+            let mut connection = session.connection.lock().await;
+            let lower = channel.to_lowercase();
+            connection
+                .channels
+                .retain(|c| c.to_lowercase() != lower);
+            tracing::warn!(
+                channel = %channel,
+                "the server said there is no such channel, so the client is no longer \
+                 pretending to be in it. the next send will join it again."
+            );
+        }
+
     // --- THE `ok` FLAG ---
     // `ok` used to mean "the api call worked", which is true even
     // when the server threw the message away. an agent checking `ok`
@@ -523,53 +546,48 @@ async fn messages(
     let me = session.options.nick.to_lowercase();
     let compact = query.compact.unwrap_or(false);
 
-    let entries = session.since(since, limit * 4).await;
+    // --- THE WHOLE LOG IS SCANNED ---
+    // this used to fetch only `limit * 4` events and then filter
+    // them. so if more than three quarters of the window was
+    // non-matching traffic — which is what a busy channel with a
+    // `--from` filter looks like — the matching event was never
+    // returned at all.
+    //
+    // and it was SILENT: the answer said `count: 0` and carried the
+    // log head as its cursor, so a caller that advanced past it never
+    // saw the message again. an agent waiting for a reply in a busy
+    // channel would wait out its timeout and conclude nobody replied.
+    //
+    // so the whole log is scanned, and `limit` applies to the RESULT.
+    let entries = session.since(since, usize::MAX).await;
 
-    let filtered: Vec<serde_json::Value> = entries
-        .into_iter()
-        .filter(|entry| {
-            if let Some(kind) = &query.kind
-                && !kind_matches(kind, &entry.event.kind)
-            {
-                return false;
-            }
-            if query.exclude_self == Some(true)
-                && entry
-                    .event
-                    .from
-                    .as_ref()
-                    .map(|f| f.to_lowercase() == me)
-                    .unwrap_or(false)
-            {
-                return false;
-            }
-            if let Some(target) = &query.target {
-                let want = target.to_lowercase();
-                let have = entry
-                    .event
-                    .target
-                    .as_ref()
-                    .map(|t| t.to_lowercase() == want)
-                    .unwrap_or(false);
-                if !have {
-                    return false;
-                }
-            }
-            if let Some(from) = &query.from {
-                let want = from.to_lowercase();
-                let have = entry
-                    .event
-                    .from
-                    .as_ref()
-                    .map(|f| f.to_lowercase() == want)
-                    .unwrap_or(false);
-                if !have {
-                    return false;
-                }
-            }
-            true
-        })
-        .take(limit)
+    // --- THE CURSOR IS THE LAST EVENT EXAMINED ---
+    // it is NOT the log head. the head is where the log is now, and
+    // using it as the cursor would skip every event that did not
+    // match the filter — so a message that arrived during a noisy
+    // moment would never be seen, by this caller or any later one.
+    //
+    // the cursor moves to the last event that was LOOKED AT, whether
+    // or not it matched. the next call starts from there and looks
+    // again.
+    let mut examined = since;
+    let mut matched: Vec<crate::session::LoggedEvent> = Vec::new();
+
+    for entry in entries {
+        examined = entry.seq;
+        if matched.len() >= limit {
+            // there are enough. stop here — but the cursor still
+            // points at the last event examined, so nothing is lost.
+            break;
+        }
+        if !matches_query(&entry, &query, &me) {
+            continue;
+        }
+        matched.push(entry);
+    }
+
+    let filtered: Vec<serde_json::Value> = matched
+        .iter()
         .map(|entry| {
             if compact {
                 // without the raw line. the other fields carry the
@@ -602,11 +620,66 @@ async fn messages(
     Json(serde_json::json!({
         "ok": true,
         "since": since,
-        "cursor": head,
+        // the cursor to use next time. it is the last event that was
+        // LOOKED AT — not the log head. using the head would skip
+        // every event the filter turned away, and those would never
+        // be seen again.
+        "cursor": examined,
+        // where the log actually is. useful when the caller wants to
+        // know whether it is behind.
+        "head": head,
         "count": filtered.len(),
         "messages": filtered,
     }))
     .into_response()
+}
+
+/// does an event match what the caller asked for?
+fn matches_query(
+    entry: &crate::session::LoggedEvent,
+    query: &MessagesQuery,
+    me: &str,
+) -> bool {
+    if let Some(kind) = &query.kind
+        && !kind_matches(kind, &entry.event.kind)
+    {
+        return false;
+    }
+    if query.exclude_self == Some(true)
+        && entry
+            .event
+            .from
+            .as_ref()
+            .map(|f| f.to_lowercase() == me)
+            .unwrap_or(false)
+    {
+        return false;
+    }
+    if let Some(target) = &query.target {
+        let want = target.to_lowercase();
+        let have = entry
+            .event
+            .target
+            .as_ref()
+            .map(|t| t.to_lowercase() == want)
+            .unwrap_or(false);
+        if !have {
+            return false;
+        }
+    }
+    if let Some(from) = &query.from {
+        let want = from.to_lowercase();
+        let have = entry
+            .event
+            .from
+            .as_ref()
+            .map(|f| f.to_lowercase() == want)
+            .unwrap_or(false);
+        if !have {
+            return false;
+        }
+    }
+    true
 }
 
 /// does an event of this kind match what the caller asked for?

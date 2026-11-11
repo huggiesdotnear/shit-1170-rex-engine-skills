@@ -197,6 +197,21 @@ pub async fn run(session: Arc<Session>) {
 
         session.mark_disconnected();
         session.clear_sender().await;
+
+        // --- FORGET THE CHANNELS ---
+        // the server forgot us too. the channel list is what says
+        // which channels WE are in, and it is what the reconnect uses
+        // to decide whether it needs to send a JOIN.
+        //
+        // without this, the reconnect sees the channels still in the
+        // list, skips the JOIN, and the client believes it is in
+        // channels it is not in. every message to them is refused with
+        // `403 No such channel`, and nothing recovers it.
+        {
+            let mut connection = session.connection.lock().await;
+            connection.forget_channels();
+        }
+
         tracing::info!("connection lost, reconnecting");
         sleep(backoff).await;
         backoff = (backoff * 2).min(BACKOFF_MAX);

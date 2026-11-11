@@ -939,6 +939,23 @@ impl IrcConnection {
         }
     }
 
+    /// forget that we are in any channel.
+    ///
+    /// --- WHY THIS EXISTS ---
+    /// the channel list says which channels WE are in. when the socket
+    /// dies, the server forgets us too — every channel is left behind.
+    ///
+    /// so the list has to be cleared on the way out, or the reconnect
+    /// will think it is still in the channels and skip the JOIN. the
+    /// client then believes it is in a channel it is not in, and every
+    /// message to it is refused with `403 No such channel`.
+    ///
+    /// that is a permanent wedge: the agent reconnects, believes it is
+    /// fine, and sends into a channel where nobody is listening.
+    pub fn forget_channels(&mut self) {
+        self.channels.clear();
+    }
+
     /// close the connection.
     pub async fn close(&mut self) {
         self.closed = true;
