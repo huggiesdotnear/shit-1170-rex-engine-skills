@@ -31,6 +31,7 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
   - [RHEA.AMMV2.md](./shit-1170-rex-rhea-ammv2/DOCS/RHEA.AMMV2.md) — the full method reference: every view and every call, with the argument shape, the gas and the deposit
 - [shit-1170-rex-hello-sleet-near](./shit-1170-rex-hello-sleet-near/SKILL.md) — the hello.sleet.near greeting contract
 - [shit-1170-rex-fastfs](./shit-1170-rex-fastfs/SKILL.md) — FastFS file uploads: the borsh payload, the chunking rule, the limits, and the serving URL
+- [shit-1170-rex-near-social](./shit-1170-rex-near-social/SKILL.md) — near.social: reading the feeds, profiles, posts, threads and notifications, and queueing posts, replies, quotes, likes, reposts, follows and profile edits
 - [shit-1170-rex-unit-conversion](./shit-1170-rex-unit-conversion/SKILL.md) — human amounts to chain units, using the token's real decimals
 
 ## the local store

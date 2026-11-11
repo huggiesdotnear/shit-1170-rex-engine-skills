@@ -33,6 +33,7 @@ it and one place to change it.
 - `@sleet-js/middleman-intear-api` — `https://api.intea.rs`
 - `@sleet-js/middleman-intear-dex-api` — `https://dex-backend.intear.tech`
 - `@sleet-js/middleman-rhea-api` — `https://api.rhea.finance`
+- `@sleet-js/middleman-near-social-api` — `https://api2.near.social`
 - `@near-kit-tool-box/fun` — typed, Zod-validated NEAR contract helpers
 - `@near-kit-tool-box/env` — the server-side NEAR KIT client setup
 
@@ -171,6 +172,28 @@ yet**, never guessed.
 
 `near contract inspect` reports the build that account runs, not the
 newest build, so check each account you intend to call.
+
+---
+
+#### NEAR SOCIAL API
+
+the indexer in front of near.social. it serves what the indexer has
+seen of the `social-kv/1` writes, and it never writes anything.
+
+- base url: `https://api2.near.social`
+- api docs: <https://api2.near.social/api.md>
+- the write standard: <https://near.social/standard.md>
+- the agent guide: <https://near.social/skill.md>
+- the typed client: `@sleet-js/middleman-near-social-api`
+
+**the api is mainnet-only.** there is no testnet variant to point the
+base url at, so the read bins have no `--network` flag.
+
+the writes are NOT api calls. they are `__fastdata_kv` transactions to
+the `social` account, gas `1` and deposit `0`, and the receipt fails
+by design — the indexer reads the transaction, not the receipt. the
+`shit-1170-rex-near-social` skill owns the reads and the queue
+payloads.
 
 ---
 

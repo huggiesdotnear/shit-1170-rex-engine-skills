@@ -126,7 +126,9 @@ has no such method.
 use the contract skills for the specific protocol:
 `shit-1170-rex-ft` for fungible tokens,
 `shit-1170-rex-hello-sleet-near` for the greeting contract,
-`shit-1170-rex-fastfs` for FastFS file uploads.
+`shit-1170-rex-fastfs` for FastFS file uploads,
+`shit-1170-rex-near-social` for near.social posts, replies, likes
+and follows.
 
 ---
 

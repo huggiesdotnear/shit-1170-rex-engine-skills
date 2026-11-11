@@ -1,0 +1,53 @@
+{
+  "skill_name": "shit-1170-rex-near-social",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "What's happening on near.social right now? Show me the global feed.",
+      "expected_output": "Reads the feed with feed.ts --feed global, prints the posts with their authors, text, counts and timestamps, and hands back the opaque next_cursor for the next page. The read goes to the indexer API directly — no API key, no engine account, no wallet — and the bin prints pure JSON on stdout with the middleman's request log on stderr.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Post 'gm from the agent #near' on near.social as alice.near. Make it so I can sign it.",
+      "expected_output": "Prepares the queue payload with post_write.ts: contractId social, method __fastdata_kv, args whose top-level key is post/{unix_millis} with the text, gas 1, deposit 0. Checks the payload against the social-kv/1 standard first. Queues it with the engine skill's queue_tx.ts, explains in plain language what the post does, reports the queue id and the signing link, and states plainly that the receipt will fail with CodeDoesNotExist by design and that the indexer is the thing to verify.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I signed the near.social post you queued and the receipt says it failed with CodeDoesNotExist on social. Did it not work?",
+      "expected_output": "Explains plainly that the failed receipt is the expected shape of a social write and not a failure: the social account has no contract and does not need one, the FastData indexer does not look at receipt status, and it reads the transaction's args instead. Confirms through the indexer with tx.ts --tx-hash, explains that indexed:false means it has not been seen yet and to poll rather than resend, and does not tell the human the post failed.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Reply to oxmnt.tg/1794350042236 with 'nice one' as alice.near.",
+      "expected_output": "Reads the post first with post.ts to confirm it exists and to see the thread. Prepares the payload with post_write.ts --reply-to: the args object carries BOTH keys in one action — post/{post_id} with text and reply_to, and the reply/{parent}/{post_id} backlink as {}. Establishes the root of the thread: --root-is-parent when the parent is a top-level post, --root <account_id/post_id> when the parent is itself a reply, and NO root at all when it cannot be known — the indexer falls back to reply_to, and a wrong root puts the reply in the wrong place. Gas 1, deposit 0.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Follow @bob.near from alice.near, and like their post bob.near/1759140000000 while you're at it.",
+      "expected_output": "Prepares both edges with edge.ts: graph/follow/bob.near as {} and like/bob.near/1759140000000 as {}. The like key names the TARGET POST's author, not the account that signs the write — the liker is the predecessor of the receipt and is not in the key. Notes that an edge is active if and only if its value is a JSON object, that --undo writes null instead. Checks the payload against the standard before queuing.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Set up alice.near's near.social profile — display name Alice, and a bio that says she's an automated agent that posts #near news.",
+      "expected_output": "Prepares the profile writes with profile.ts: profile/name and profile/about, both plain strings, gas 1, deposit 0. Puts the automation disclosure in the about field as the standard asks, and checks the text lengths against the limits (name 256, about 10000) before queuing.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "Delete alice.near's post 1759140000000.",
+      "expected_output": "Prepares the delete with delete.ts: the key post/1759140000000 written as null. Says plainly that a delete is a TOMBSTONE — the post goes away, but the old versions stay in public history forever and anyone can read them. Asks for --reply-to if the post is a reply, because a reply's delete must tombstone its backlink too.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "Post a photo of a sunset on near.social as alice.near — the image is at https://example.com/sunset.png.",
+      "expected_output": "Refuses the https:// src: v1 accepts only fastfs:// media URIs, and an https:// image makes the whole post invalid and therefore absent, with no error anywhere. Points at the fastfs skill for the upload — it has the borsh payload, the 1 MiB chunking rule and the limits — and that the upload has to land first and produce a fastfs:// URI. The media mime must be one of image/webp, image/jpeg, image/png, image/gif or image/avif.",
+      "files": []
+    }
+  ]
+}
