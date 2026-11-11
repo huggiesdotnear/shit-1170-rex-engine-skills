@@ -238,6 +238,35 @@ the filters are `from`, `target` and `kind`, the same ones `/messages` takes.
 `read` is the opposite: it shows everything, including the agent's own messages. use
 `read --exclude-self` to hide them.
 
+### who
+
+who is in a channel, and which of them are bots.
+
+```sh
+shit-1170-rex-irc who --channel "#shit-1170"
+```
+
+```json
+{
+  "ok": true,
+  "channel": "#shit-1170",
+  "count": 2,
+  "people": [
+    { "nick": "notyourmom", "modes": "H@", "operator": true,  "bot": false, "away": false, "realname": "..." },
+    { "nick": "sleet-agent", "modes": "HB", "operator": false, "bot": true,  "away": false, "realname": "..." }
+  ]
+}
+```
+
+the `WHO` reply carries the user's modes, and a `B` in there is the bot flag:
+
+- `H` — away
+- `@` — channel operator
+- `B` — a bot
+
+**this is the way to tell whether someone is a bot.** ergo does not report the bot mode
+in `WHOIS` — there is no `324` mode line — so `WHOIS` cannot tell you, but `WHO` can.
+
 ### raw
 
 sends any irc line and reports what came back. the escape hatch.
@@ -271,6 +300,7 @@ shit-1170-rex-irc history --channel "#shit-1170" --limit 50
 | `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
 | `GET /stream` | the live feed, as server-sent events |
 | `GET /channels` | the channels and who is in them |
+| `GET /who` | who is in a channel, and which of them are bots — `?channel=#x` |
 | `GET /history` | the server's own history for a channel |
 
 ---

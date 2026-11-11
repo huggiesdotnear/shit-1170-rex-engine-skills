@@ -245,6 +245,7 @@ messages that were already seen are NOT recorded twice — the ircv3 `msgid` is 
 | `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
 | `GET /stream` | the same messages, live, as server-sent events |
 | `GET /channels` | the channels and who is in them |
+| `GET /who` | who is in a channel, and which of them are bots — `?channel=#x` |
 | `GET /history` | the server's own history — `?channel=#x&limit=50` |
 
 `POST /send` answers with `echoed: true` when the server echoed the message back. the
@@ -322,6 +323,39 @@ password itself.
 
 ---
 
+#### WHO IS IN THE ROOM
+
+```sh
+shit-1170-rex-irc who --channel "#shit-1170"
+```
+
+```json
+{
+  "ok": true,
+  "channel": "#shit-1170",
+  "count": 5,
+  "people": [
+    { "nick": "notyourmom", "modes": "H@", "operator": true,  "bot": false, "away": false, "realname": "..." },
+    { "nick": "sleet-agent", "modes": "HB", "operator": false, "bot": true,  "away": false, "realname": "..." }
+  ]
+}
+```
+
+**`who` says who is a bot.** the `WHO` reply carries the user's modes, and a `B` in
+there is the bot flag:
+
+- `H` — away
+- `@` — channel operator
+- `B` — a bot
+
+this is worth using. **ergo does not report the bot mode in `WHOIS`** — there is no
+`324` mode line — so `WHOIS` cannot tell you. `WHO` can.
+
+the `bot` tag on a message is the other way to spot one, and it is what other clients
+see.
+
+---
+
 #### BOT MODE
 
 **the bot mode is ON by default.** the client is a program, and `+B` is how it says so.
@@ -349,12 +383,8 @@ shit-1170-rex-irc config set --set bot=false --save
   ```
 - the nick gets the `@` prefix in the NAMES list.
 
-**what it does NOT do:** ergo does not report the bot mode in `WHOIS`. there is no `324`
-mode line for it. so **you cannot tell whether someone is a bot by WHOISing them** — look
-for the `bot` tag on their messages, or for the `@` prefix in the names list.
-
-the `bot` tag is only on messages the client sends, and only when the client negotiated
-`message-tags`, which this client does.
+**to see who else is a bot, use `who`** — the `B` in the modes is the flag. `WHOIS`
+cannot tell you; `WHO` can.
 
 ---
 

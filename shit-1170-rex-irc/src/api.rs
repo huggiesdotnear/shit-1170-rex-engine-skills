@@ -50,6 +50,7 @@ pub fn router(session: Arc<Session>) -> Router {
         .route("/messages", get(messages))
         .route("/stream", get(stream))
         .route("/channels", get(channels))
+        .route("/who", get(who))
         .route("/history", get(history))
         .with_state(session)
 }
@@ -580,6 +581,77 @@ async fn channels(State(session): State_) -> impl IntoResponse {
         "channels": connection.channels,
         "names": names(&connection),
     }))
+}
+
+/// who is in a channel, and which of them are bots.
+///
+/// the `WHO` reply is the good one. its `352` line carries the user's
+/// modes, and a `B` in there is the bot flag — so this can say who is
+/// a bot even though WHOIS does not report it.
+///
+/// the modes look like `H@B`:
+///   H — away
+///   @ — channel operator
+///   B — a bot
+async fn who(
+    State(session): State_,
+    Query(query): Query<WhoQuery>,
+) -> axum::response::Response {
+    let channel = query.channel.clone();
+
+    // ask the server.
+    let (reply, wait) = tokio::sync::oneshot::channel();
+    let command = crate::reader::Command::Send {
+        line: format!("WHO {channel}"),
+        wait_ms: 1500,
+        reply,
+    };
+    if let Err(err) = session.command(command).await {
+        return fail(StatusCode::SERVICE_UNAVAILABLE, err);
+    }
+
+    let replies = match wait.await {
+        Ok(Ok(replies)) => replies,
+        Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
+        Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
+    };
+
+    // the 352 line is:
+    //   352 <me> <channel> <user> <host> <server> <nick> <flags> :<hops> <realname>
+    let people: Vec<serde_json::Value> = replies
+        .iter()
+        .filter(|m| m.command == "352")
+        .filter_map(|m| {
+            let flags = m.params.get(6)?;
+            let nick = m.params.get(5)?;
+            let realname = m.params.last().cloned().unwrap_or_default();
+            Some(serde_json::json!({
+                "nick": nick,
+                // the modes, without the leading H that every user has.
+                "modes": flags,
+                "operator": flags.contains('@') || flags.contains('&'),
+                // this is the one that matters: a `B` in the modes.
+                "bot": flags.contains('B'),
+                "away": flags.contains('G'),
+                "realname": realname,
+            }))
+        })
+        .collect();
+
+    Json(serde_json::json!({
+        "ok": true,
+        "channel": channel,
+        "count": people.len(),
+        "people": people,
+    }))
+    .into_response()
+}
+
+/// the query for `who`.
+#[derive(Debug, Deserialize)]
+struct WhoQuery {
+    /// the channel to ask about.
+    channel: String,
 }
 
 /// the server's own history for a channel.

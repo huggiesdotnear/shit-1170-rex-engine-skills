@@ -165,6 +165,15 @@ enum Command {
         #[arg(long, default_value = "8787")]
         api_port: u16,
     },
+    /// who is in a channel, and which of them are bots.
+    Who {
+        /// the channel.
+        #[arg(long)]
+        channel: String,
+        /// the port the daemon listens on.
+        #[arg(long, default_value = "8787")]
+        api_port: u16,
+    },
     /// send any irc line. the escape hatch.
     Raw {
         /// the line to send.
@@ -422,6 +431,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Part { channel, api_port } => {
             let body = json!({ "channel": channel });
             let answer = post(&api_url(api_port), "/part", &body).await?;
+            println!("{}", serde_json::to_string_pretty(&answer)?);
+        }
+
+        Command::Who { channel, api_port } => {
+            let query = format!("?channel={}", urlencode(&channel));
+            let answer = get(&api_url(api_port), &format!("/who{query}")).await?;
             println!("{}", serde_json::to_string_pretty(&answer)?);
         }
 
