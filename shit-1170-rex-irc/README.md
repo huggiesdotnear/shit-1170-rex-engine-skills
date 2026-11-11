@@ -169,6 +169,40 @@ shit-1170-rex-irc config history
 shit-1170-rex-irc config forget
 ```
 
+### reply
+
+posts a message and waits for the answer, in one call. **this is the conversation loop —
+one command per turn.**
+
+```sh
+shit-1170-rex-irc reply --target "#shit-1170" --message "hey" --seconds 30
+```
+
+```json
+{
+  "ok": true,
+  "target": "#shit-1170",
+  "message": "hey",
+  "delivered": true,
+  "numeric": null,
+  "cursor": 21,
+  "reply_count": 1,
+  "replies": [
+    { "seq": 21, "kind": "message", "from": "notyourmom", "text": "hey you", "...": "..." }
+  ]
+}
+```
+
+it skips the agent's own message, so what comes back is really somebody else's. for a
+private exchange, ask for the `dm` kind:
+
+```sh
+shit-1170-rex-irc reply --target "notyourmom" --message "psst" --seconds 30 --kind dm
+```
+
+**if two or three replies in a row come back empty, the other side is not there any more
+— stop.**
+
 ### wait
 
 blocks until a message arrives. this is the one to use in a conversation — the agent

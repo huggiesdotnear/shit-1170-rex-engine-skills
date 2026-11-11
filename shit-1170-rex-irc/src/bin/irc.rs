@@ -98,6 +98,34 @@ enum Command {
         #[arg(long, default_value = "8787")]
         api_port: u16,
     },
+    /// send a message and wait for the reply, in one call.
+    ///
+    /// this is the whole conversation loop in a single command: it
+    /// posts, then blocks until something comes back, and answers
+    /// with both the send result and what was heard.
+    ///
+    /// the agent's own message is skipped, so the reply it gets is
+    /// really somebody else's.
+    Reply {
+        /// the channel or nick.
+        #[arg(long)]
+        target: String,
+        /// the text to send.
+        #[arg(long)]
+        message: String,
+        /// how long to wait for the reply, in seconds.
+        #[arg(long, default_value_t = 30)]
+        seconds: u64,
+        /// only accept a reply from this nick.
+        #[arg(long)]
+        from: Option<String>,
+        /// only accept a reply of this kind. `message`, `dm`, ...
+        #[arg(long, default_value = "message")]
+        kind: String,
+        /// the port the daemon listens on.
+        #[arg(long, default_value = "8787")]
+        api_port: u16,
+    },
     /// read what came in.
     Read {
         /// the cursor. 0 reads everything the log holds.
@@ -389,6 +417,91 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let body = json!({ "line": line, "wait_ms": wait_ms });
             let answer = post(&api_url(api_port), "/raw", &body).await?;
             println!("{}", serde_json::to_string_pretty(&answer)?);
+        }
+
+        Command::Reply {
+            target,
+            message,
+            seconds,
+            from,
+            kind,
+            api_port,
+        } => {
+            // --- WHY THIS IS ONE CALL AND NOT TWO ---
+            // the conversation loop is "post, then wait for the
+            // answer". making the agent do that as two calls means
+            // it has to track the cursor between them, and that is
+            // where the self-echo bug came from.
+            //
+            // so this does both, and the cursor handling is internal.
+
+            // --- WHY THE CURSOR IS TAKEN BEFORE THE SEND ---
+            // the send waits a moment for the echo. a reply can
+            // arrive DURING that wait, and by the time the send
+            // answers, the cursor it returns is already past the
+            // reply — so the reply would be missed.
+            //
+            // so the cursor is read BEFORE posting. everything after
+            // that point is a candidate reply.
+            let mut cursor = get(&api_url(api_port), "/status")
+                .await?
+                .get("cursor")
+                .and_then(|c| c.as_u64())
+                .unwrap_or(0);
+
+            // 1. post.
+            let body = json!({ "target": target, "message": message });
+            let sent = post(&api_url(api_port), "/send", &body).await?;
+
+            // 2. wait for the answer. the agent's own message is
+            //    skipped, so the reply it gets is really somebody
+            //    else's.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+            let mut replies: Vec<serde_json::Value> = Vec::new();
+
+            while std::time::Instant::now() < deadline {
+                let mut query = format!("?since={cursor}&limit=100&exclude_self=true");
+                if !kind.is_empty() {
+                    query.push_str(&format!("&kind={}", urlencode(&kind)));
+                }
+                if let Some(from) = &from {
+                    query.push_str(&format!("&from={}", urlencode(from)));
+                }
+
+                let answer = get(&api_url(api_port), &format!("/messages{query}")).await?;
+                let messages = answer
+                    .get("messages")
+                    .and_then(|m| m.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+
+                // the cursor moves first, so a filtered-out message
+                // does not come back on the next poll.
+                if let Some(head) = answer.get("cursor").and_then(|c| c.as_u64()) {
+                    cursor = head;
+                }
+
+                if !messages.is_empty() {
+                    replies = messages;
+                    break;
+                }
+
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "ok": sent.get("ok").cloned().unwrap_or(json!(true)),
+                    "target": target,
+                    "message": message,
+                    "delivered": sent.get("delivered").cloned().unwrap_or(json!(false)),
+                    "numeric": sent.get("numeric").cloned().unwrap_or(json!(null)),
+                    "cursor": cursor,
+                    "reply_count": replies.len(),
+                    "replies": replies,
+                }))?
+            );
         }
 
         Command::Wait {
