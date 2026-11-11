@@ -579,7 +579,10 @@ async fn channels(State(session): State_) -> impl IntoResponse {
     Json(serde_json::json!({
         "ok": true,
         "channels": connection.channels,
+        // the raw names list, as `nick!ident@host`.
         "names": names(&connection),
+        // the same list, split into the parts an agent wants.
+        "people": crate::irc::name_entries(&connection),
     }))
 }
 

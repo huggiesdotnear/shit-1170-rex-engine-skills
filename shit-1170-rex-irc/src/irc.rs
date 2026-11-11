@@ -886,6 +886,68 @@ pub fn numerics(connection: &IrcConnection) -> HashMap<String, String> {
     out
 }
 
+/// one entry in a channel's names list.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NameEntry {
+    /// the nick, without the ident and the host.
+    pub nick: String,
+    /// the nick as it appeared, `nick!ident@host`.
+    pub raw: String,
+    /// the channel operator prefix, `@` or `&`, when there is one.
+    pub operator: Option<String>,
+    /// the `+` or `%` prefix, when there is one.
+    pub voice: Option<String>,
+}
+
+/// the names in a channel, split into their parts.
+///
+/// the `353` names reply gives `nick!ident@host`, and sometimes a
+/// prefix before it. an agent wants the nick on its own, so the parts
+/// are pulled apart here.
+pub fn name_entries(connection: &IrcConnection) -> HashMap<String, Vec<NameEntry>> {
+    let mut out: HashMap<String, Vec<NameEntry>> = HashMap::new();
+    for message in &connection.messages {
+        if message.command != "353" {
+            continue;
+        }
+        let channel = message.params.get(2).cloned().unwrap_or_default();
+        let entry = out.entry(channel).or_default();
+
+        for name in message
+            .params
+            .get(3)
+            .cloned()
+            .unwrap_or_default()
+            .split(' ')
+            .filter(|n| !n.is_empty())
+        {
+            // the prefix comes before the nick: `@nick`, `+nick`, `%nick`.
+            let (prefix, rest) = match name.chars().next() {
+                Some(c) if "@&+%".contains(c) => (Some(c.to_string()), &name[1..]),
+                _ => (None, name),
+            };
+
+            let nick = rest.split('!').next().unwrap_or(rest).to_string();
+            if entry.iter().any(|e| e.nick == nick) {
+                continue;
+            }
+            entry.push(NameEntry {
+                nick,
+                raw: name.to_string(),
+                operator: prefix
+                    .as_ref()
+                    .filter(|p| matches!(p.as_str(), "@" | "&"))
+                    .cloned(),
+                voice: prefix
+                    .as_ref()
+                    .filter(|p| matches!(p.as_str(), "+" | "%"))
+                    .cloned(),
+            });
+        }
+    }
+    out
+}
+
 /// the channels on the server, from a `353` names reply.
 pub fn names(connection: &IrcConnection) -> HashMap<String, Vec<String>> {
     let mut out: HashMap<String, Vec<String>> = HashMap::new();
