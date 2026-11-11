@@ -98,4 +98,22 @@ mod tests {
         let config = crate::store::IrcConfig::default();
         assert!(config.bot, "the bot mode should be the default");
     }
+
+    #[test]
+    fn the_two_bot_defaults_agree() {
+        // the store holds the config default and the library holds
+        // the options default. they were disagreeing: the store said
+        // on, the library said off. so a caller that built its
+        // options directly — rather than going through the store —
+        // got a client that did not say it was a bot.
+        //
+        // the integration test `the_bot_mode_is_set_on_connect` caught
+        // this. this test makes sure it stays caught.
+        let options = IrcOptions::default();
+        let config = crate::store::IrcConfig::default();
+        assert_eq!(
+            options.bot, config.bot,
+            "the library default and the config default must agree"
+        );
+    }
 }

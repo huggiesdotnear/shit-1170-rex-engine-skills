@@ -24,6 +24,9 @@ clap = { version = "4", features = ["derive", "env"] }
 dirs = "5"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
 [[bin]]
 name = "shit-1170-rex-irc"
 path = "src/bin/irc.rs"

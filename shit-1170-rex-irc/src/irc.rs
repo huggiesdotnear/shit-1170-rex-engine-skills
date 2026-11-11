@@ -363,7 +363,10 @@ impl Default for IrcOptions {
             sasl_user: None,
             sasl_pass: None,
             timeout_ms: DEFAULT_TIMEOUT_MS,
-            bot: false,
+            // the bot mode is on by default. the client is a program,
+            // and this is how it says so. it matches the config
+            // default in the store — the two must not disagree.
+            bot: true,
             channels: Vec::new(),
         }
     }
@@ -548,12 +551,31 @@ impl IrcConnection {
         // client says, which is how a well-behaved client says "this
         // is a program, not a person".
         //
-        // it is opt-in. a client that posts occasionally is not a bot,
-        // and saying so when it is not would be a lie other clients
-        // act on. an agent that posts a lot SHOULD set it.
+        // it is opt-in in the sense that there is a flag to turn it
+        // off, but the default is on — see the note on `bot` in
+        // `IrcOptions`.
+        //
+        // --- WHY THE CONFIRMATION IS NOT THE 221 ---
+        // the server sends `221 <nick> +Z` at registration, with the
+        // mode list as it was BEFORE we asked. so waiting for a 221
+        // finds that stale one at once and never checks whether our
+        // mode was applied.
+        //
+        // the answer we want is the `MODE` line the server echoes
+        // back for our own command — that one carries the `+B`.
         if self.options.bot {
             self.send(&format!("MODE {} +B", self.options.nick)).await?;
-            let _ = self.wait_for_with_timeout(|m| m.command == "221", 3000).await;
+            // the echo is `MODE <nick> +B`, so the mode is the SECOND
+            // param. the first one is the nick the mode applies to.
+            let _ = self
+                .wait_for_with_timeout(
+                    |m| {
+                        m.command == "MODE"
+                            && m.params.iter().any(|p| p.contains('B'))
+                    },
+                    3000,
+                )
+                .await;
         }
 
         Ok(())
