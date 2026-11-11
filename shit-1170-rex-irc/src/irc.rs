@@ -93,6 +93,13 @@ pub struct IrcMessage {
     pub tags: HashMap<String, String>,
     /// the whole raw line, as it came off the wire.
     pub raw: String,
+    /// the sequence number this message was given, in the order the
+    /// client read it.
+    ///
+    /// this is what lets a command wait for its own answer without
+    /// reading the socket: it notes the number before it sends, and
+    /// looks for the answer after it.
+    pub seq: u64,
 }
 
 /// a message the agent cares about, flattened for json output.
@@ -199,6 +206,8 @@ pub fn parse_line(raw: &str) -> IrcMessage {
         params,
         tags,
         raw: raw.to_string(),
+        // the sequence is filled in when the message is read.
+        seq: 0,
     }
 }
 
@@ -461,6 +470,11 @@ pub struct IrcConnection {
     >>,
     timeout_ms: u64,
     closed: bool,
+    /// how many lines have been read on this connection.
+    ///
+    /// it goes on each message as it is read, so a command can find
+    /// the answer to its own command later.
+    pub read_seq: u64,
 }
 
 impl IrcConnection {
@@ -480,6 +494,7 @@ impl IrcConnection {
             socket: None,
             timeout_ms,
             closed: false,
+            read_seq: 0,
         }
     }
 
@@ -805,6 +820,16 @@ impl IrcConnection {
     }
 
     /// read the next message off the wire.
+    ///
+    /// the lock is held across the read, because the socket is one
+    /// stream and two readers would race for the frames.
+    ///
+    /// --- WHY THE READ IS SHORT ---
+    /// the lock is held for as long as the read waits, and a command
+    /// that wants the lock — to send a JOIN, say — waits for it. so
+    /// the read waits only a little, gives the lock back, and comes
+    /// round again. the cost is a few more wakeups; the benefit is
+    /// that a command is never stuck behind a read.
     pub async fn read_message(&mut self) -> IrcResult<IrcMessage> {
         use futures_util::StreamExt;
 
@@ -879,6 +904,13 @@ impl IrcConnection {
     /// this is async because it may have to ANSWER the server — a PING
     /// has to be answered with a PONG, and sending is async.
     async fn on_data(&mut self, message: &IrcMessage) {
+        // the sequence number goes on the message as it is read. it is
+        // what a command uses to find its own answer later, without
+        // reading the socket itself.
+        self.read_seq += 1;
+        let mut message = message.clone();
+        message.seq = self.read_seq;
+
         self.messages.push(message.clone());
 
         // --- THE RAW TRAFFIC IS BOUNDED ---
@@ -990,7 +1022,7 @@ impl IrcConnection {
                     self.channels.retain(|c| c.to_lowercase() != lower);
                 }
 
-        if let Some(event) = to_event(message) {
+        if let Some(event) = to_event(&message) {
             self.events.push(event);
         }
     }

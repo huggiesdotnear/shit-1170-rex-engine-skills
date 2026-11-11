@@ -64,26 +64,34 @@ const BACKOFF_MAX: Duration = Duration::from_secs(30);
 /// a command for the read loop.
 #[derive(Debug)]
 pub enum Command {
-    /// send a raw irc line and wait for the answer.
+    /// send a raw irc line.
+    ///
+    /// the command only SENDS. it does not wait for the answer — the
+    /// read loop has to keep reading, or the answer would never
+    /// arrive. the caller waits for the answer in the session's log.
     Send {
         line: String,
         /// how long to wait for the reply.
         wait_ms: u64,
-        /// where to send the reply.
-        reply: oneshot::Sender<Result<Vec<IrcMessage>, IrcError>>,
+        /// the raw counter from before the send, so the caller can
+        /// find the answer.
+        reply: oneshot::Sender<Result<u64, IrcError>>,
     },
     /// send a line and do not wait.
     Fire { line: String },
-    /// join a channel and wait for the JOIN echo.
+    /// join a channel.
+    ///
+    /// like `Send`, it only sends. the caller waits for the echo.
     Join {
         channel: String,
-        reply: oneshot::Sender<Result<(), IrcError>>,
+        /// the raw counter from before the join.
+        reply: oneshot::Sender<Result<u64, IrcError>>,
     },
     /// leave a channel.
     Part {
         channel: String,
         reason: Option<String>,
-        reply: oneshot::Sender<Result<(), IrcError>>,
+        reply: oneshot::Sender<Result<u64, IrcError>>,
     },
 }
 
@@ -151,20 +159,36 @@ pub async fn run(session: Arc<Session>) {
 
         // join the channels the config asked for, now that the
         // connection is up.
-        let channels = session.options.channels.clone();
-        for channel in channels {
-            if let Err(err) = do_join(&session, &channel).await {
-                tracing::warn!(%err, channel = %channel, "could not join");
+        //
+        // the JOIN is only SENT here. the echo is picked up by the
+        // read loop, which starts next — so the wait for it happens
+        // there, and not in a place where nothing is reading yet.
+        {
+            let mut connection = session.connection.lock().await;
+            for channel in &session.options.channels {
+                if connection
+                    .channels
+                    .iter()
+                    .any(|c| c.to_lowercase() == channel.to_lowercase())
+                {
+                    continue;
+                }
+                if let Err(err) = connection.send(&format!("JOIN {channel}")).await {
+                    tracing::warn!(%err, channel = %channel, "could not join");
+                }
             }
         }
 
         // after a reconnect, ask for what was missed while the socket
         // was down.
         //
+        // the requests are only SENT here too. the answers come back
+        // and the read loop picks them up.
+        //
         // this runs AFTER the re-join, because the gap fill asks
         // about channels we are in — and right after a drop we are in
         // none of them until we join.
-        gap_fill(&session).await;
+        gap_fill_request(&session).await;
 
         loop {
             // wait for either a command or an incoming message.
@@ -179,8 +203,14 @@ pub async fn run(session: Arc<Session>) {
                 read = read_one(&session) => {
                     match read {
                         Ok(Some(message)) => {
-                            // record the event, if it is one the agent
-                            // cares about.
+                            // every raw message goes in the raw list.
+                            // a command needs to find its own answer
+                            // there, and that answer may be an event
+                            // (the echo of a PRIVMSG) or a numeric.
+                            session.record_raw(message.clone()).await;
+
+                            // and the ones that are events go in the
+                            // log, which is what the agent reads.
                             if let Some(event) = to_event(&message) {
                                 session.record(event).await;
                             }
@@ -248,74 +278,64 @@ async fn handle_command(session: &Arc<Session>, command: Command) {
             wait_ms,
             reply,
         } => {
-            let result = send_and_wait(session, &line, wait_ms).await;
-            let _ = reply.send(result);
-        }        Command::Join { channel, reply } => {
-            let result = do_join(session, &channel).await;
-            let _ = reply.send(result);
+            // --- THE COMMAND ONLY SENDS ---
+            // the read loop has to keep reading, or the answer would
+            // never arrive. so the command sends and answers straight
+            // away, and the caller waits for the answer in the log.
+            let before = session.raw_head();
+            let mut connection = session.connection.lock().await;
+            let result = connection.send(&line).await;
+            drop(connection);
+            let _ = reply.send(result.map(|_| before));
+            let _ = wait_ms;
+        }
+        Command::Join { channel, reply } => {
+            let before = session.raw_head();
+            let mut connection = session.connection.lock().await;
+
+            // already in it? the server would not echo the join, and
+            // there is nothing to wait for.
+            let already = connection
+                .channels
+                .iter()
+                .any(|c| c.to_lowercase() == channel.to_lowercase());
+
+            let result = if already {
+                Ok(())
+            } else {
+                connection.send(&format!("JOIN {channel}")).await
+            };
+            drop(connection);
+            let _ = reply.send(result.map(|_| before));
         }
         Command::Part {
             channel,
             reason,
             reply,
         } => {
-            let result = do_part(session, &channel, reason.as_deref()).await;
-            let _ = reply.send(result);
-        }
-    }
-}
+            let before = session.raw_head();
+            let mut connection = session.connection.lock().await;
 
-/// send a line and collect the reply.
-///
-/// the reply is whatever the server sends until the timeout. this
-/// waits for the socket, so it must run in the read loop — not in an
-/// http handler, which would race the reader.
-async fn send_and_wait(
-    session: &Arc<Session>,
-    line: &str,
-    wait_ms: u64,
-) -> Result<Vec<IrcMessage>, IrcError> {
-    let mut connection = session.connection.lock().await;
-    let before = connection.messages.len();
-    connection.send(line).await?;
+            // not in it? the server would not echo the part either.
+            let in_channel = connection
+                .channels
+                .iter()
+                .any(|c| c.to_lowercase() == channel.to_lowercase());
 
-    let deadline = tokio::time::Instant::now() + Duration::from_millis(wait_ms);
-    loop {
-        if tokio::time::Instant::now() >= deadline {
-            break;
-        }
-        // wait for one more message, but no longer than the deadline.
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        match tokio::time::timeout(remaining, connection.read_message()).await {
-            Ok(Ok(_)) => {
-                // keep going until the deadline, or until the reply
-                // looks complete.
-                if connection.messages.len() > before
-                    && reply_looks_done(&connection.messages[before..], &connection.options.nick)
-                {
-                    break;
+            let result = if !in_channel {
+                Ok(())
+            } else {
+                match reason {
+                    Some(reason) => {
+                        connection.send(&format!("PART {channel} :{reason}")).await
+                    }
+                    None => connection.send(&format!("PART {channel}")).await,
                 }
-            }
-            Ok(Err(err)) => return Err(err),
-            Err(_) => break,
+            };
+            drop(connection);
+            let _ = reply.send(result.map(|_| before));
         }
     }
-
-    let replies = connection.messages[before..].to_vec();
-    drop(connection);
-
-    // --- THE MESSAGES THAT CAME BACK GO IN THE LOG ---
-    // this command read them off the socket, so the read loop will
-    // not see them. if they are not recorded here, they are lost from
-    // the log — and the echo of the agent's own message is exactly
-    // what an agent wants to see in its next read.
-    for message in &replies {
-        if let Some(event) = to_event(message) {
-            session.record(event).await;
-        }
-    }
-
-    Ok(replies)
 }
 
 /// does this batch of replies look finished?
@@ -323,11 +343,18 @@ async fn send_and_wait(
 /// `nick` is our own nickname, so the echo of our own message can be
 /// told apart from traffic that happened to arrive while we waited.
 ///
+/// `sent_text` is the text of the command that was sent. the echo
+/// comes back with the same text, so matching on it tells THIS
+/// command's echo apart from another command's — which matters when
+/// several commands are in flight at once. without it, the first
+/// command to see any echo would claim it, and the others would
+/// report no echo at all.
+///
 /// the server sends the answer to a command and then nothing else, so
 /// a short quiet period after the first reply means the answer is
-/// complete. the timeout in `send_and_wait` is the real bound; this
-/// just makes the common case return sooner.
-fn reply_looks_done(messages: &[IrcMessage], nick: &str) -> bool {
+/// complete. the timeout in the caller is the real bound; this just
+/// makes the common case return sooner.
+pub fn reply_looks_done(messages: &[IrcMessage], nick: &str, sent_text: &str) -> bool {
     // a closed batch means the whole batch arrived.
     if messages
         .iter()
@@ -352,158 +379,23 @@ fn reply_looks_done(messages: &[IrcMessage], nick: &str) -> bool {
     // comes straight back. that echo IS the answer, and waiting for
     // more after it just burns the timeout.
     //
-    // the echo is from OUR OWN nick. a PRIVMSG from somebody else is
-    // not the answer to our command — it is just traffic that
-    // happened to arrive while we waited — so it must not end the
-    // wait.
+    // the echo is from OUR OWN nick, and it carries the text we
+    // sent. a PRIVMSG from somebody else is not the answer to our
+    // command — it is just traffic that happened to arrive while we
+    // waited — so it must not end the wait.
+    //
+    // and when several commands are in flight, the TEXT is what
+    // tells them apart. without it the first command to see any echo
+    // would claim it, and the rest would report no echo at all.
     messages.iter().any(|m| {
         m.command == "PRIVMSG"
             && m.prefix
                 .as_ref()
                 .map(|p| p.split('!').next().unwrap_or(p) == nick)
                 .unwrap_or(false)
+            && (sent_text.is_empty()
+                || m.params.last().map(|t| t == sent_text).unwrap_or(false))
     })
-}
-
-/// join a channel and wait for the JOIN echo.
-///
-/// --- WHY IT CHECKS THE CHANNEL LIST FIRST ---
-/// the server does NOT echo a JOIN for a channel the client is already
-/// in. it just ignores it. so a join of a channel we are already in
-/// would wait for an echo that never comes and time out.
-///
-/// so: if we are already in it, return at once. there is nothing to
-/// wait for, and nothing to do.
-async fn do_join(session: &Arc<Session>, channel: &str) -> Result<(), IrcError> {
-    let mut connection = session.connection.lock().await;
-
-    // already in it? nothing to wait for.
-    if connection
-        .channels
-        .iter()
-        .any(|c| c.to_lowercase() == channel.to_lowercase())
-    {
-        return Ok(());
-    }
-
-    let before = connection.messages.len();
-    connection.send(&format!("JOIN {channel}")).await?;
-
-    let deadline =
-        tokio::time::Instant::now() + Duration::from_millis(session.options.timeout_ms);
-    loop {
-        if tokio::time::Instant::now() >= deadline {
-            return Err(IrcError::WaitTimeout {
-                what: format!("the JOIN of {channel}"),
-                timeout_ms: session.options.timeout_ms,
-            });
-        }
-        // the echo may already have arrived.
-        let joined = connection.messages[before..].iter().any(|m| {
-            m.command == "JOIN"
-                && m.params
-                    .first()
-                    .map(|p| p.to_lowercase() == channel.to_lowercase())
-                    .unwrap_or(false)
-        });
-        if joined {
-            // record the channel too. the message handler normally
-            // does this, but a JOIN that arrived while the reader was
-            // busy would be missed, and the channel list is what
-            // every "am i in it?" check reads.
-            let lower = channel.to_lowercase();
-            if !connection.channels.iter().any(|c| c.to_lowercase() == lower) {
-                connection.channels.push(channel.to_string());
-            }
-            // the messages this command read belong in the log too.
-            let seen = connection.messages[before..].to_vec();
-            drop(connection);
-            for message in &seen {
-                if let Some(event) = to_event(message) {
-                    session.record(event).await;
-                }
-            }
-            return Ok(());
-        }
-
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        match tokio::time::timeout(remaining, connection.read_message()).await {
-            Ok(Ok(_)) => continue,
-            Ok(Err(err)) => return Err(err),
-            Err(_) => {
-                return Err(IrcError::WaitTimeout {
-                    what: format!("the JOIN of {channel}"),
-                    timeout_ms: session.options.timeout_ms,
-                });
-            }
-        }
-    }
-}
-
-/// leave a channel and wait for the PART echo.
-async fn do_part(
-    session: &Arc<Session>,
-    channel: &str,
-    reason: Option<&str>,
-) -> Result<(), IrcError> {
-    let mut connection = session.connection.lock().await;
-
-    // not in it? the server will not echo a PART either.
-    if !connection
-        .channels
-        .iter()
-        .any(|c| c.to_lowercase() == channel.to_lowercase())
-    {
-        return Ok(());
-    }
-
-    let before = connection.messages.len();
-    match reason {
-        Some(reason) => connection.send(&format!("PART {channel} :{reason}")).await?,
-        None => connection.send(&format!("PART {channel}")).await?,
-    }
-
-    let deadline =
-        tokio::time::Instant::now() + Duration::from_millis(session.options.timeout_ms);
-    loop {
-        if tokio::time::Instant::now() >= deadline {
-            return Err(IrcError::WaitTimeout {
-                what: format!("the PART of {channel}"),
-                timeout_ms: session.options.timeout_ms,
-            });
-        }
-        let parted = connection.messages[before..].iter().any(|m| {
-            m.command == "PART"
-                && m.params
-                    .first()
-                    .map(|p| p.to_lowercase() == channel.to_lowercase())
-                    .unwrap_or(false)
-        });
-        if parted {
-            let lower = channel.to_lowercase();
-            connection.channels.retain(|c| c.to_lowercase() != lower);
-            let seen = connection.messages[before..].to_vec();
-            drop(connection);
-            for message in &seen {
-                if let Some(event) = to_event(message) {
-                    session.record(event).await;
-                }
-            }
-            return Ok(());
-        }
-
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        match tokio::time::timeout(remaining, connection.read_message()).await {
-            Ok(Ok(_)) => continue,
-            Ok(Err(err)) => return Err(err),
-            Err(_) => {
-                return Err(IrcError::WaitTimeout {
-                    what: format!("the PART of {channel}"),
-                    timeout_ms: session.options.timeout_ms,
-                });
-            }
-        }
-    }
 }
 
 /// how many channels to gap-fill at once.
@@ -529,7 +421,24 @@ const GAP_FILL_CHANNEL_CAP: usize = 20;
 /// a fixed sleep truncates the batch on a slow server. the server
 /// says when the batch is finished with `BATCH -N`, so we wait for
 /// that.
-async fn gap_fill(session: &Arc<Session>) {
+/// ask the server for the messages that arrived while the socket was
+/// down.
+///
+/// the ircd keeps the last 1000 messages per channel, so this covers
+/// a reconnect that was not too long. it is a best effort: if the
+/// request fails, the agent simply misses that window.
+///
+/// --- WHY ONLY THE CHANNELS WE ARE IN ---
+/// asking about a channel we are not in gets `FAIL CHATHISTORY
+/// INVALID_TARGET` from the server. and the server answers every
+/// request, so asking about a hundred channels means a hundred
+/// failures and a hundred replies to sort through.
+///
+/// --- WHY IT ONLY SENDS ---
+/// the answers come back and the read loop picks them up. waiting
+/// for them here would stop the reading, and the answers would never
+/// arrive.
+async fn gap_fill_request(session: &Arc<Session>) {
     let msgid = session.last_msgid.lock().await.clone();
     let Some(msgid) = msgid else {
         // nothing was seen before, so there is nothing to fill.
@@ -548,60 +457,17 @@ async fn gap_fill(session: &Arc<Session>) {
         .take(GAP_FILL_CHANNEL_CAP)
         .collect();
 
-    {
-        let mut connection = session.connection.lock().await;
-        for channel in &channels {
-            // `AFTER` gets the messages that came after the one we saw.
-            let line = format!("CHATHISTORY AFTER {channel} msgid={msgid} 100");
-            if let Err(err) = connection.send(&line).await {
-                tracing::warn!(%err, channel = %channel, "could not ask for the missed messages");
-                return;
-            }
-        }
-    }
-
-    // wait for the batches to close, rather than sleeping for a guess.
-    let deadline = tokio::time::Instant::now() + Duration::from_millis(4000);
-    loop {
-        let closed = {
-            let connection = session.connection.lock().await;
-            connection
-                .messages
-                .iter()
-                .filter(|m| m.command == "BATCH" && m.params.get(1) == Some(&"-".to_string()))
-                .count()
-        };
-        if closed >= channels.len() {
-            break;
-        }
-        if tokio::time::Instant::now() >= deadline {
-            tracing::debug!(
-                "the gap fill batches did not all close in time — taking what arrived"
-            );
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-
-    let batch: Vec<IrcMessage> = {
-        let connection = session.connection.lock().await;
-        connection
-            .messages
-            .iter()
-            .filter(|m| m.command == "PRIVMSG" && m.tags.contains_key("batch"))
-            .cloned()
-            .collect()
-    };
-
-    for message in batch {
-        if let Some(event) = to_event(&message) {
-            tracing::info!(?event.from, ?event.text, "recovered a missed message");
-            session.record(event).await;
+    let mut connection = session.connection.lock().await;
+    for channel in &channels {
+        // `AFTER` gets the messages that came after the one we saw.
+        let line = format!("CHATHISTORY AFTER {channel} msgid={msgid} 100");
+        if let Err(err) = connection.send(&line).await {
+            tracing::warn!(%err, channel = %channel, "could not ask for the missed messages");
+            return;
         }
     }
 }
 
-/// sleep, without caring whether it was interrupted.
 async fn sleep(duration: Duration) {
     tokio::time::sleep(duration).await;
 }

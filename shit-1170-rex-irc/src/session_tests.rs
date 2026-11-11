@@ -140,8 +140,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_cursor_covers_everything_that_was_recorded() {
-        // the cursor is what a caller advances. it has to cover every
+    async fn the_cursor_covers_everything_that_was_recorded() {        // the cursor is what a caller advances. it has to cover every
         // event, or a message is skipped for good.
         let session = session();
         for i in 0..50 {
@@ -168,5 +167,62 @@ mod tests {
             cursor = batch[batch.len() - 1].seq;
         }
         assert_eq!(seen, 50, "walking the cursor missed some events");
+    }
+
+    #[tokio::test]
+    async fn the_raw_counter_is_separate_from_the_event_counter() {
+        // the two counters count different things. the event log
+        // counts events; the raw list counts every line the server
+        // sent. mixing them up means a command looks in the wrong
+        // place for its answer.
+        let session = session();
+        assert_eq!(session.log_head(), 0);
+        assert_eq!(session.raw_head(), 0);
+
+        session.record(event_from("someone", "hello")).await;
+        assert_eq!(session.log_head(), 1, "the event log moved");
+        assert_eq!(
+            session.raw_head(),
+            0,
+            "the raw counter must not move for an event"
+        );
+
+        let raw = crate::irc::IrcMessage {
+            prefix: Some("irc.shit-1170.com".to_string()),
+            command: "401".to_string(),
+            params: vec!["me".to_string(), "ghost".to_string()],
+            tags: Default::default(),
+            raw: ":irc.shit-1170.com 401 me ghost :No such nick".to_string(),
+            seq: 0,
+        };
+        session.record_raw(raw).await;
+        assert_eq!(session.raw_head(), 1, "the raw counter moved");
+        assert_eq!(
+            session.log_head(),
+            1,
+            "the event log must not move for a numeric"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_raw_list_is_found_by_its_counter() {
+        // a command waits for the answer using the raw counter. it
+        // has to find what came after its own send.
+        let session = session();
+        let before = session.raw_head();
+
+        let raw = crate::irc::IrcMessage {
+            prefix: Some("me!~u@host".to_string()),
+            command: "PRIVMSG".to_string(),
+            params: vec!["#chan".to_string(), "the echo".to_string()],
+            tags: Default::default(),
+            raw: ":me!~u@host PRIVMSG #chan :the echo".to_string(),
+            seq: 0,
+        };
+        session.record_raw(raw).await;
+
+        let found = session.raw_since(before).await;
+        assert_eq!(found.len(), 1, "the answer was not found");
+        assert_eq!(found[0].params.last().unwrap(), "the echo");
     }
 }

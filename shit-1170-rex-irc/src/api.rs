@@ -179,22 +179,58 @@ async fn join(
         return fail(StatusCode::SERVICE_UNAVAILABLE, err);
     }
 
-    match wait.await {
-        Ok(Ok(())) => {
-            let channels = {
-                let connection = session.connection.lock().await;
-                connection.channels.clone()
-            };
-            Json(serde_json::json!({
-                "ok": true,
-                "channel": request.channel,
-                "channels": channels,
-            }))
-            .into_response()
-        }
-        Ok(Err(err)) => fail(StatusCode::BAD_GATEWAY, err),
-        Err(_) => fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
+    let before = match wait.await {
+        Ok(Ok(before)) => before,
+        Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
+        Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
+    };
+
+    // wait for the JOIN echo, in the log. the read loop keeps
+    // reading while this waits — that is the whole point.
+    let lower = request.channel.to_lowercase();
+    let joined = session
+        .wait_for_event(session.options.timeout_ms, before, |event| {
+            event.kind == "join"
+                && event
+                    .target
+                    .as_ref()
+                    .map(|t| t.to_lowercase() == lower)
+                    .unwrap_or(false)
+        })
+        .await;
+
+    if joined.is_none() {
+        return fail(
+            StatusCode::GATEWAY_TIMEOUT,
+            format!("the JOIN of {} did not come back", request.channel),
+        );
     }
+
+    // record the channel too. the message handler normally does
+    // this, but a JOIN that arrived while the reader was busy would
+    // be missed, and the channel list is what every "am i in it?"
+    // check reads.
+    {
+        let mut connection = session.connection.lock().await;
+        if !connection
+            .channels
+            .iter()
+            .any(|c| c.to_lowercase() == lower)
+        {
+            connection.channels.push(request.channel.clone());
+        }
+    }
+
+    let channels = {
+        let connection = session.connection.lock().await;
+        connection.channels.clone()
+    };
+    Json(serde_json::json!({
+        "ok": true,
+        "channel": request.channel,
+        "channels": channels,
+    }))
+    .into_response()
 }
 
 /// does this channel exist on the server?
@@ -210,13 +246,18 @@ async fn channel_exists(session: &Arc<Session>, channel: &str) -> Result<bool, I
     };
     session.command(command).await?;
 
-    let replies = match wait.await {
-        Ok(Ok(replies)) => replies,
+    let before = match wait.await {
+        Ok(Ok(before)) => before,
         Ok(Err(err)) => return Err(err),
         Err(_) => {
             return Err(IrcError::NotOpen);
         }
     };
+
+    // wait for the answer, in the log.
+    let replies = session
+        .wait_for_reply(1500, before, "", &session.options.nick)
+        .await;
 
     Ok(replies.iter().any(|m| m.command == "322"))
 }
@@ -244,7 +285,7 @@ async fn part(
     }
 
     match wait.await {
-        Ok(Ok(())) => {
+        Ok(Ok(_)) => {
             let channels = {
                 let connection = session.connection.lock().await;
                 connection.channels.clone()
@@ -300,10 +341,27 @@ async fn send(
             if let Err(err) = session.command(command).await {
                 return fail(StatusCode::SERVICE_UNAVAILABLE, err);
             }
-            match wait.await {
-                Ok(Ok(())) => joined.push(request.target.clone()),
+            let before = match wait.await {
+                Ok(Ok(before)) => before,
                 Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
                 Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
+            };
+
+            // wait for the JOIN echo, in the log.
+            let lower = request.target.to_lowercase();
+            let echoed = session
+                .wait_for_event(session.options.timeout_ms, before, |event| {
+                    event.kind == "join"
+                        && event
+                            .target
+                            .as_ref()
+                            .map(|t| t.to_lowercase() == lower)
+                            .unwrap_or(false)
+                })
+                .await;
+
+            if echoed.is_some() {
+                joined.push(request.target.clone());
             }
         }
     }
@@ -322,6 +380,13 @@ async fn send(
 
     // send the message. the read loop does the sending, because it
     // owns the socket.
+    //
+    // the command only SENDS. it does not wait for the answer — the
+    // read loop has to keep reading, or the answer would never
+    // arrive. so the wait happens here, on the session's log.
+    let before = session.raw_head();
+    let sent_text = request.message.clone();
+
     let (reply, wait) = tokio::sync::oneshot::channel();
     let command = crate::reader::Command::Send {
         line: format!("PRIVMSG {} :{}", request.target, request.message),
@@ -331,12 +396,14 @@ async fn send(
     if let Err(err) = session.command(command).await {
         return fail(StatusCode::SERVICE_UNAVAILABLE, err);
     }
+    if let Ok(Err(err)) = wait.await {
+        return fail(StatusCode::BAD_GATEWAY, err);
+    }
 
-    let replies = match wait.await {
-        Ok(Ok(replies)) => replies,
-        Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
-        Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
-    };
+    // wait for the answer, in the log.
+    let replies = session
+        .wait_for_reply(1200, before, &sent_text, &session.options.nick)
+        .await;
 
     // the echo is the proof the message landed. the server advertises
     // `echo-message`, so it sends the message back to the sender.
@@ -466,21 +533,26 @@ async fn raw(
     State(session): State_,
     Json(request): Json<RawRequest>,
 ) -> axum::response::Response {
+    let before = session.raw_head();
+    let wait_ms = request.wait_ms.unwrap_or(800);
+
     let (reply, wait) = tokio::sync::oneshot::channel();
     let command = crate::reader::Command::Send {
         line: request.line.clone(),
-        wait_ms: request.wait_ms.unwrap_or(800),
+        wait_ms,
         reply,
     };
     if let Err(err) = session.command(command).await {
         return fail(StatusCode::SERVICE_UNAVAILABLE, err);
     }
+    if let Ok(Err(err)) = wait.await {
+        return fail(StatusCode::BAD_GATEWAY, err);
+    }
 
-    let replies = match wait.await {
-        Ok(Ok(replies)) => replies,
-        Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
-        Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
-    };
+    // wait for the answer, in the log.
+    let replies = session
+        .wait_for_reply(wait_ms, before, "", &session.options.nick)
+        .await;
 
     let replies: Vec<serde_json::Value> = replies
         .iter()
@@ -848,12 +920,16 @@ async fn who(
     if let Err(err) = session.command(command).await {
         return fail(StatusCode::SERVICE_UNAVAILABLE, err);
     }
-
-    let replies = match wait.await {
-        Ok(Ok(replies)) => replies,
+    let before = match wait.await {
+        Ok(Ok(before)) => before,
         Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
         Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
     };
+
+    // wait for the answer, in the log.
+    let replies = session
+        .wait_for_reply(1500, before, "", &session.options.nick)
+        .await;
 
     // the 352 line is:
     //   352 <me> <channel> <user> <host> <server> <nick> <flags> :<hops> <realname>
@@ -938,12 +1014,16 @@ async fn history(
     if let Err(err) = session.command(command).await {
         return fail(StatusCode::SERVICE_UNAVAILABLE, err);
     }
-
-    let replies = match wait.await {
-        Ok(Ok(replies)) => replies,
+    let before = match wait.await {
+        Ok(Ok(before)) => before,
         Ok(Err(err)) => return fail(StatusCode::BAD_GATEWAY, err),
         Err(_) => return fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
     };
+
+    // wait for the batch, in the log.
+    let replies = session
+        .wait_for_reply(2500, before, "", &session.options.nick)
+        .await;
 
     // only the messages inside the batch count. the server answers
     // with `BATCH +N chathistory <target>` ... `BATCH -N`, and the
