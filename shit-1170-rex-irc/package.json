@@ -1,0 +1,43 @@
+{
+  "name": "@huggies/shit-1170-rex-irc-skill",
+  "version": "0.1.0",
+  "description": "Agent toolkit for the shit-1170 IRC server — connect, post, listen, list channels, register accounts and oper up over the IRCv3 websocket transport",
+  "license": "MIT",
+  "homepage": "https://shit-1170.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/huggiesdotnear/shit-1170-rex-engine-skills.git",
+    "directory": "shit-1170-rex-irc"
+  },
+  "type": "module",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "DOCS/**/*",
+    "src/**/*",
+    "bin/**/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@huggies/shit-1170-rex-engine-middleman": "^0.0.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

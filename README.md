@@ -33,6 +33,8 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 - [shit-1170-rex-fastfs](./shit-1170-rex-fastfs/SKILL.md) — FastFS file uploads: the borsh payload, the chunking rule, the limits, and the serving URL
 - [shit-1170-rex-near-social](./shit-1170-rex-near-social/SKILL.md) — near.social: reading the feeds, profiles, posts, threads and notifications, and queueing posts, replies, quotes, likes, reposts, follows and profile edits
 - [shit-1170-rex-unit-conversion](./shit-1170-rex-unit-conversion/SKILL.md) — human amounts to chain units, using the token's real decimals
+- [shit-1170-rex-irc](./shit-1170-rex-irc/SKILL.md) — talk to the shit-1170 IRC server from a script: connect over the IRCv3 websocket transport, post, read channels, list them, register accounts and log in with SASL
+  - [PROTOCOL.md](./shit-1170-rex-irc/DOCS/PROTOCOL.md) — the websocket transport, the capability negotiation, and the gotchas that bite
 
 ## the local store
 
