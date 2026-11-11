@@ -1,0 +1,33 @@
+[package]
+name = "shit-1170-rex-irc"
+version = "0.2.0"
+edition = "2024"
+description = "A long-lived IRC client for the shit-1170 IRC server — axum REST + SSE over the IRCv3 websocket transport"
+license = "MIT"
+homepage = "https://shit-1170.com/"
+repository = "https://github.com/huggiesdotnear/shit-1170-rex-engine-skills.git"
+
+[dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.27", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+async-stream = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive", "env"] }
+dirs = "5"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+
+[[bin]]
+name = "shit-1170-rex-irc"
+path = "src/bin/irc.rs"
+
+# =================================================
+# copyright 2026 by sleet.near
+# =================================================

@@ -64,6 +64,64 @@ the only difference is the transport.
 
 ---
 
+## THE PING, AND WHY THE PONG IS THE WHOLE STORY
+
+**this is the thing that makes a long-lived connection possible, and the thing that is
+easiest to get wrong.**
+
+the ircd's config says:
+
+```yaml
+idle-timeouts:
+    registration: 60s
+    ping: 1m30s
+    disconnect: 2m30s
+```
+
+so the server pings the client after **90 seconds** of silence, and drops the connection
+**60 seconds** later if the client has not answered.
+
+measured against the running server:
+
+| client | what happened |
+| --- | --- |
+| silent | dropped at about **150 seconds** |
+| answering the ping | still connected at **220+ seconds** |
+
+the ping looks like this:
+
+```
+@time=2026-11-11T19:42:31.352Z PING pong-test-1
+```
+
+**the token is the pinged client's own nick**, not a server token. so the answer is:
+
+```
+PONG pong-test-1
+```
+
+and the server compares the token it sent with the token it got back.
+
+### the bug that cost the most
+
+the first version of this client answered the ping like this:
+
+```rust
+// in a synchronous function
+let _ = self.send(&format!("PONG {token}"));
+```
+
+`send` is async. `let _ =` on an async fn creates the future and **drops it without ever
+polling it**, so the pong was never written to the socket. the code compiled. the
+connection still died at 150 seconds, with `Ping timeout: 2m30s` in the quit message.
+
+the fix is to make the handler async and `await` the send.
+
+> **a rule for this repo: an async call in a sync function is a bug, even when the
+> compiler allows it.** `let _ = some_async_fn()` is a silent no-op.
+
+---
+
 ## THE CAPABILITY NEGOTIATION
 
 **it happens DURING registration, not after.** this is the single most common mistake.
@@ -107,13 +165,19 @@ checked against its own `CAP LS`:
 ```
 account-notify        account-tag           away-notify
 batch                 cap-notify            chghost
-echo-message          extended-join         invite-notify
-labeled-response      message-tags          multi-prefix
-sasl                  server-time           setname
-standard-replies      userhost-in-names
+draft/chathistory     echo-message          extended-join
+invite-notify         labeled-response      message-tags
+multi-prefix          sasl                  server-time
+setname               standard-replies      userhost-in-names
 ```
 
-plus a pile of `draft/*` ones the client does not ask for.
+plus a pile of other `draft/*` ones the client does not ask for.
+
+**`draft/chathistory` is the one that matters here.** without it the server answers every
+`CHATHISTORY` with `461 Not enough parameters`.
+
+the ISUPPORT says `CHATHISTORY=1000` and `MSGREFTYPES=msgid,timestamp`, so the server
+keeps 1000 messages per channel and can be asked for them by msgid.
 
 ---
 
@@ -154,7 +218,68 @@ the username appears twice — once as the authzid, once as the authcid.
 
 ### a PRIVMSG sent before registration finishes is dropped
 
-the client has to wait for `001`. the `send` bin registers first, then joins, then sends.
+the client has to wait for `001`.
+
+### the CHATHISTORY syntax
+
+the ircv3 draft is:
+
+```text
+CHATHISTORY LATEST <target> <* | timestamp=... | msgid=...> <limit>
+CHATHISTORY AFTER  <target> <* | timestamp=... | msgid=...> <limit>
+CHATHISTORY TARGETS <timestamp> <timestamp> <limit>
+```
+
+the target comes BEFORE the limit, and `TARGETS=` is a **different subcommand** that lists
+the buffers that have history in them — it does not fetch messages.
+
+the working form for the latest messages:
+
+```
+CHATHISTORY LATEST #rust-test * 50
+```
+
+which comes back as:
+
+```
+@draft/chathistory-end;time=... :irc.shit-1170.com BATCH +1 chathistory #rust-test
+@msgid=...;time=...;batch=1 :nick!ident@host PRIVMSG #rust-test :the message
+@time=... :irc.shit-1170.com BATCH -1
+```
+
+> **the bug the old typescript skill had:** it sent
+> `CHATHISTORY LATEST <limit> TARGETS=<chan>` — the wrong order AND the wrong subcommand.
+> the server answered every one of those with `461 Not enough parameters`.
+
+### joining a channel you are already in gets no echo
+
+the server does **not** echo a JOIN for a channel the client is already in. it just
+ignores it.
+
+so a client that sends `JOIN` and waits for the echo waits forever. check the channel list
+first:
+
+```rust
+if connection.channels.iter().any(|c| c.to_lowercase() == channel.to_lowercase()) {
+    return Ok(());   // already in it
+}
+```
+
+the same goes for `PART` on a channel the client is not in.
+
+### the prefix is `nick!ident@host`, not the bare nick
+
+```rust
+// wrong — never matches
+if prefix.to_lowercase() == me { ... }
+
+// right
+let nick = prefix.split('!').next().unwrap_or(prefix);
+if nick.to_lowercase() == me { ... }
+```
+
+getting this wrong leaves the channel list empty, and every "am I in this channel?" check
+then fails.
 
 ---
 
@@ -169,6 +294,7 @@ the client has to wait for `001`. the `send` bin registers first, then joins, th
 - account registration is open to anyone, 30 attempts per 10 minutes
 - the one oper is `admin`, with the `server-admin` class
 - **no persistent data** — the datastore lives in the container's writable layer
+- the idle timeouts are `ping 1m30s`, `disconnect 2m30s`
 
 ### the bot mode
 
@@ -186,7 +312,7 @@ the server then attaches the IRCv3 `bot` tag to everything that client says:
 ```
 
 the tag only goes on messages the client sends, and only when the client has the
-`message-tags` capability — which this skill negotiates.
+`message-tags` capability — which this client negotiates.
 
 ### the origin check
 
@@ -216,6 +342,25 @@ the only fix is an empty list.
 
 ---
 
+## ONE READER, ONE WRITER
+
+a websocket is one stream. **if two tasks read it, they race**, and each frame goes to one
+of them. a command that sends `JOIN` and then waits for the JOIN echo would be waiting for
+a frame the other task took.
+
+so the read loop owns the socket. it reads, and it serves the commands:
+
+```text
+the http handler ──command channel──▶ the read loop ──▶ the socket
+                                            │
+                                            └──▶ the session log
+```
+
+a command that needs to wait for a reply — a `JOIN`, a `WHATSNEW` — waits inside the read
+loop, because that is the only thing that can see the reply.
+
+---
+
 ## THE WEBSOCKET API
 
 bun has a `WebSocket` built in — no dependency:
@@ -226,7 +371,7 @@ ws.onopen = () => ws.send("NICK myagent");
 ws.onmessage = (event) => console.log(String(event.data));
 ```
 
-that is all the transport needs. `src/irc.ts` wraps it with the IRC layer.
+that is all the transport needs. `src/irc.rs` wraps it with the IRC layer.
 
 =====================
 <br/>

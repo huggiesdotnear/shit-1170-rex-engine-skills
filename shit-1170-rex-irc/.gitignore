@@ -1,0 +1,5 @@
+# the rust build
+/target/
+
+# the local store, if it is ever pointed at the repo
+*.pid

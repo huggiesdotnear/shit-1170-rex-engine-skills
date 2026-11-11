@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-irc
-description: "Talk to the shit-1170 IRC server from a script — connect over the IRCv3 websocket transport, post messages to channels, read what is being said, list the channels and who is in them, register an account, log in with SASL, and oper up as the server admin. Use this skill whenever the user mentions the shit-1170 IRC server, irc.shit-1170.com, #shit-1170, joining or reading an IRC channel, posting to IRC, an IRC bot, an IRC agent, or wants a script or an agent to talk to the IRC server. The transport is WEBSOCKETS, not plain IRC — plain IRC on port 6667 does not work through the tunnel."
+description: "Talk to the shit-1170 IRC server from a script or an agent — a long-lived connection that stays up, so the agent can READ a channel while it POSTS to it, with a REST API and a live server-sent-event stream. Use this skill whenever the user mentions the shit-1170 IRC server, irc.shit-1170.com, #shit-1170, joining or reading an IRC channel, posting to IRC, an IRC bot, an IRC agent, or wants a script or an agent to talk to the IRC server. The transport is WEBSOCKETS, not plain IRC — plain IRC on port 6667 does not work through the tunnel. The connection answers the server's ping, which is what keeps it alive."
 ---
 
 # shit-1170 rex irc
@@ -9,6 +9,129 @@ the shit-1170 irc server runs [ergo](https://ergochat.github.io/ergo/) in docker
 cloudflare tunnel. this skill is the way to talk to it from a script or an agent.
 
 the server: <https://irc.shit-1170.com>
+
+---
+
+#### THE SHAPE: A DAEMON AND A CLIENT
+
+the agent talks to a **daemon** over http. the daemon holds the irc connection open.
+
+```
+   the agent                    the daemon                    the irc server
+   ─────────                    ─────────                    ────────────
+   send   ──── POST /send ────▶                            
+   read   ──── GET  /messages ▶  ┌──────────────┐             PRIVMSG
+   watch  ──── GET  /stream ──▶ │  one socket  │ ──────────▶
+   read   ──── GET  /messages ▶  │  stays up    │ ◀────────── message
+                                └──────────────┘
+```
+
+so the agent can **read a channel while it posts to it**, over one connection. that is the
+thing the old one-shot bins could not do: each bin connected, did one thing, and left.
+
+```sh
+# start the daemon. it holds the connection and serves the api.
+shit-1170-rex-irc serve --nick myagent --join "#shit-1170"
+
+# post
+shit-1170-rex-irc send --target "#shit-1170" --message "hello"
+
+# read what came in
+shit-1170-rex-irc read --since 0 --limit 50
+
+# read ONLY what is new since the last read
+shit-1170-rex-irc read --since 8 --limit 50
+
+# watch it live
+shit-1170-rex-irc watch
+```
+
+every answer is json. the daemon listens on `127.0.0.1:8787` by default.
+
+---
+
+#### THE CURSOR
+
+every event gets a sequence number. a read takes `since` and returns what is newer.
+
+```sh
+# what have I not seen yet?
+shit-1170-rex-irc read --since 0
+```
+
+`since 0` reads everything the log still holds. the answer carries the cursor to use
+next time. so the agent reads with the last cursor and never sees the same message twice.
+
+this is the fix for the old skill's `listen_fun`, which took its baseline at the moment
+it was CALLED and so silently dropped every message that arrived before the call.
+
+---
+
+#### THE PING, AND WHY THE PONG IS THE WHOLE STORY
+
+**the ircd pings the client after 90 seconds of silence and drops the connection 60
+seconds later.** the config says:
+
+```yaml
+idle-timeouts:
+    registration: 60s
+    ping: 1m30s
+    disconnect: 2m30s
+```
+
+a client that does not answer the ping is disconnected with `Ping timeout: 2m30s`.
+
+this was measured against the running server, not read off a doc:
+
+- a client that stayed silent was dropped at about **150 seconds**
+- a client that answered the ping stayed connected well past **220 seconds**
+
+so the daemon answers every `PING` with a `PONG`. the token in the ping is the pinged
+client's own nick, so the answer is `PONG <our nick>`.
+
+**a long-lived connection is not possible without this.** if you change the ping handling,
+change the daemon, not the server config.
+
+---
+
+#### THE RECONNECT, AND WHAT IT DOES NOT LOSE
+
+when the socket drops for any reason — the tunnel, the network, a server restart — the
+daemon reconnects with a backoff (1s, doubling, to a maximum of 30s).
+
+and then it asks for what it missed:
+
+```text
+CHATHISTORY AFTER <channel> msgid=<the last msgid we saw> 100
+```
+
+the ircd keeps the last **1000** messages per channel in memory (`CHATHISTORY=1000` in
+the ISUPPORT), so a reconnect that was not too long loses nothing. the server answers with
+a `BATCH`, and the messages inside are put back into the log.
+
+messages that were already seen are NOT recorded twice — the ircv3 `msgid` is what says so.
+
+---
+
+#### THE API
+
+| route | what it does |
+| --- | --- |
+| `GET /health` | is the connection up? |
+| `GET /status` | the server's identity, the channels, the capabilities, the cursor |
+| `POST /join` | join a channel — `{"channel":"#x"}` |
+| `POST /part` | leave a channel — `{"channel":"#x"}` |
+| `POST /send` | post a message — `{"target":"#x","message":"hi"}` |
+| `POST /raw` | send any irc line — `{"line":"WHOIS someone"}` |
+| `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x` |
+| `GET /stream` | the same messages, live, as server-sent events |
+| `GET /channels` | the channels and who is in them |
+| `GET /history` | the server's own history — `?channel=#x&limit=50` |
+
+`POST /send` answers with `echoed: true` when the server echoed the message back. the
+server advertises `echo-message`, so that echo is the proof the message landed.
+
+`GET /stream` is the live feed. each event is one `data:` line of json.
 
 ---
 
@@ -48,21 +171,18 @@ ${HOME}/.shit-1170-rex-engine/irc/
   history.jsonl     the messages seen, one json object per line
 ```
 
-the flags win over the config file, and the config file wins over the built-in defaults.
-so an agent can set a default once and still override it for one call.
-
 ```sh
 # set a default nick and turn on the bot mode
-bun bin/config.ts --set nick=myagent --set bot=true --save
+shit-1170-rex-irc config set --set nick=myagent --set bot=true --save
 
-# store the account password, so the bins log in on their own
-bun bin/config.ts --save-credentials "yourpassword"
+# store the account password, so the daemon logs in on its own
+shit-1170-rex-irc config save-credentials "yourpassword"
 
 # what was seen
-bun bin/config.ts --history
+shit-1170-rex-irc config history
 ```
 
-**the password is never printed.** a bin reports `has_credentials: true`, never the
+**the password is never printed.** a command reports `has_credentials: true`, never the
 password itself.
 
 ---
@@ -75,52 +195,11 @@ not a person".
 
 it is **opt-in**, and that is deliberate. a client that posts occasionally is not a bot,
 and saying so when it is not would be a lie other clients act on. an agent that posts a
-lot SHOULD set it — other clients can then decide how to treat it.
+lot SHOULD set it.
 
 ```sh
-bun bin/config.ts --set bot=true --save     # always a bot
-bun bin/send.ts --bot --target "#x" --message "hi"   # just this once
-bun bin/send.ts --no-bot --target "#x" --message "hi" # not this once
+shit-1170-rex-irc config set --set bot=true --save     # always a bot
 ```
-
----
-
-#### THE BINS
-
-run them with bun. every one answers with JSON on stdout, and errors with JSON on stderr
-and a non-zero exit code.
-
-```sh
-# does it work? what does the server say?
-bun bin/connect.ts --nick myagent
-
-# post to a channel
-bun bin/send.ts --target "#shit-1170" --message "hello"
-
-# read the channel for 30 seconds
-bun bin/listen.ts --channel "#shit-1170" --seconds 30
-
-# what channels are there, and who is in them
-bun bin/channels.ts --names "#shit-1170"
-
-# register an account
-bun bin/account.ts --register "yourpassword" --nick myagent
-
-# log in with SASL
-bun bin/connect.ts --nick myagent --sasl-user myagent --sasl-pass "yourpassword"
-
-# the escape hatch — any IRC line
-bun bin/raw.ts --line "WHOIS someone"
-
-# oper up (the password comes from the environment)
-SHIT_1170_IRC_OPER_PASS="..." bun bin/oper.ts --nick myagent
-
-# the local store
-bun bin/config.ts --show
-```
-
-**every bin takes `--server <hostname>`, `--nick <nick>` and `--port <port>`.** the
-defaults are this server, the `sleet-agent` nickname, and port 443.
 
 ---
 
@@ -151,7 +230,7 @@ layer, so restarting the ircd wipes every account and every channel registration
 so: register an account, use it, and expect to register again after the server restarts.
 do not build anything that assumes an account will still be there tomorrow.
 
-the skill's own history file is a local copy, so what was read is still there after a
+the daemon's own history file is a local copy, so what was read is still there after a
 restart. what was registered on the server is not.
 
 ---
@@ -160,13 +239,13 @@ restart. what was registered on the server is not.
 
 the client negotiates these, and the server offers them all:
 
-`account-notify` `account-tag` `away-notify` `batch` `cap-notify` `chghost` `echo-message`
-`extended-join` `invite-notify` `labeled-response` `message-tags` `multi-prefix` `sasl`
-`server-time` `setname` `standard-replies` `userhost-in-names`
+`account-notify` `account-tag` `away-notify` `batch` `cap-notify` `chghost` `draft/chathistory`
+`echo-message` `extended-join` `invite-notify` `labeled-response` `message-tags` `multi-prefix`
+`sasl` `server-time` `setname` `standard-replies` `userhost-in-names`
 
-`echo-message` means the server sends a message back to its sender, so `send.ts` can report
+`echo-message` means the server sends a message back to its sender, so `send` can report
 whether the message actually landed. `message-tags` means every line carries `time` and
-`msgid`.
+`msgid`. `draft/chathistory` is what makes `GET /history` and the reconnect gap-fill work.
 
 **two things about the capability negotiation, both of which bite:**
 
@@ -179,33 +258,31 @@ whether the message actually landed. `message-tags` means every line carries `ti
 
 ---
 
-#### AS A LIBRARY
+#### WHAT IS NOT HERE
 
-the bins are thin wrappers over one class. use it directly for anything the bins do not
-cover:
-
-```ts
-import { SHIT_1170_IRC_CONNECTION } from "@huggies/shit-1170-rex-irc-skill";
-
-const connection = new SHIT_1170_IRC_CONNECTION({ nick: "myagent" });
-await connection.connect_fun();
-await connection.join_fun("#shit-1170");
-connection.say_fun("#shit-1170", "hello");
-const heard = await connection.listen_fun(10_000);
-connection.close_fun();
-```
-
-see `src/irc.ts` for the whole surface: `send_fun`, `say_fun`, `join_fun`, `part_fun`,
-`sasl_fun`, `wait_for_fun`, `listen_fun`, and the `messages` and `events` arrays.
+- **no bouncer.** there is no znc, no soju. a message sent while the daemon is down is
+  gone — unless the gap-fill reaches back for it, which it can only do for the last 1000
+  messages per channel.
+- **no history across server restarts.** the ircd keeps messages in memory only.
+- **no filehost.** the `soju.im/filehost` capability is not enabled.
 
 ---
 
-#### WHAT IS NOT HERE
+#### THE CODE
 
-- **no bouncer.** there is no znc, no soju, no replay across reconnects. a message sent
-  while you are not connected is gone.
-- **no history across restarts.** the ircd keeps messages in memory only.
-- **no filehost.** the `soju.im/filehost` capability is not enabled.
+| file | what is in it |
+| --- | --- |
+| `src/irc.rs` | the parser, the connection, the events |
+| `src/session.rs` | the shared state: the log, the cursor, the broadcast |
+| `src/reader.rs` | the read loop: read, record, reconnect, gap-fill |
+| `src/api.rs` | the http api: rest plus the event stream |
+| `src/store.rs` | the local store: the config, the credentials, the history |
+| `src/bin/irc.rs` | the cli |
+
+```sh
+cargo build --release
+cargo test
+```
 
 =====================
 <br/>

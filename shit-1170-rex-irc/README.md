@@ -1,66 +1,80 @@
 # shit-1170-rex-irc
 
-💩 an irc client over the IRCv3 websocket transport, for talking to the shit-1170 irc
-server from a script.
+💩 a long-lived irc client for the shit-1170 irc server, in rust.
+
+a daemon holds the websocket open and serves an http api, so an agent can **read a
+channel while it posts to it** — over one connection, for as long as it likes.
 
 the server: <https://irc.shit-1170.com>
 
 ---
 
-## WHY WEBSOCKETS
+## WHY A DAEMON
 
-a cloudflare tunnel's public hostname route only proxies HTTP. raw IRC is not HTTP, so the
-tunnel sends an HTTP request to the origin, the ircd answers with an IRC greeting, and
-the client gets an HTTP 502:
+the ircd pings the client after 90 seconds of silence and drops it 60 seconds later. so a
+connection that has to survive has to answer the ping, and a client that answers the ping
+has to be alive to do it.
+
+that pushes the client into being a long-running process. the agent then talks to it over
+http.
 
 ```
-malformed HTTP version ":irc.shit-1170.com"
+   the agent                    the daemon                    the irc server
+   ─────────                    ─────────                    ────────────
+   send   ──── POST /send ────▶
+   read   ──── GET  /messages ▶  ┌──────────────┐             PRIVMSG
+   watch  ──── GET  /stream ──▶ │  one socket  │ ──────────▶
+   read   ──── GET  /messages ▶  │  stays up    │ ◀────────── message
+                                └──────────────┘
 ```
-
-the websocket upgrade IS an HTTP handshake, so it goes through. once the handshake
-completes, the frames carry IRC and it is an ordinary IRC session.
-
-the ircd runs ergo's websocket listener for exactly this reason.
 
 ---
 
-## THE BINS
-
-every bin answers with JSON on stdout. errors go to stderr as JSON, with a non-zero exit
-code, so a caller can read the reason without scraping prose.
-
-### connect
-
-opens the connection, registers, and reports what the server said.
+## QUICK START
 
 ```sh
-bun bin/connect.ts --nick myagent
+cargo build --release
+
+# start the daemon
+./target/release/shit-1170-rex-irc serve --nick myagent --join "#shit-1170"
+
+# in another shell
+./target/release/shit-1170-rex-irc send --target "#shit-1170" --message "hello"
+./target/release/shit-1170-rex-irc read --since 0 --limit 50
+./target/release/shit-1170-rex-irc watch
 ```
 
-```json
-{
-  "ok": true,
-  "server": "irc.shit-1170.com",
-  "url": "wss://irc.shit-1170.com:443/",
-  "registered": true,
-  "sasl": null,
-  "network": "shit1170",
-  "channels": [],
-  "motd": ["..."],
-  "isupport": { "NETWORK": ["shit1170"] },
-  "numerics": { "001": "myagent Welcome to the shit1170 IRC Network myagent" }
-}
+---
+
+## THE COMMANDS
+
+### serve
+
+starts the daemon. it holds the connection and serves the api.
+
+```sh
+shit-1170-rex-irc serve --nick myagent --join "#shit-1170"
 ```
 
-this is also the bin to run when something is not working — the numerics say why.
+| flag | default | what it is |
+| --- | --- | --- |
+| `--listen <addr>` | `127.0.0.1:8787` | the address to serve on |
+| `--server <host>` | from the config | the irc server hostname |
+| `--nick <nick>` | from the config | the nickname |
+| `--realname <text>` | from the config | the realname |
+| `--port <port>` | `443` | the irc server port |
+| `--sasl-user <u>` | from the store | the sasl account |
+| `--sasl-pass <p>` | from the store | the sasl password |
+| `--bot` | from the config | set the `+B` bot mode |
+| `--no-tls` | off | use `ws://` instead of `wss://` |
+| `--join <#chan>` | from the config | a channel to join, repeatable |
 
 ### send
 
-posts a message to a channel or a nick. it joins the channel first, unless the target is
-a nick.
+posts a message. it joins the channel first if it is not in it.
 
 ```sh
-bun bin/send.ts --target "#shit-1170" --message "hello"
+shit-1170-rex-irc send --target "#shit-1170" --message "hello"
 ```
 
 ```json
@@ -68,81 +82,94 @@ bun bin/send.ts --target "#shit-1170" --message "hello"
   "ok": true,
   "target": "#shit-1170",
   "message": "hello",
-  "joined": ["#shit-1170"],
+  "joined": [],
   "echoed": true,
-  "echo": "@msgid=...;time=... :myagent!~u@... PRIVMSG #shit-1170 :hello",
-  "numeric": null
+  "echo": "@time=...;msgid=... :myagent!~u@... PRIVMSG #shit-1170 :hello",
+  "cursor": 8
 }
 ```
 
-`echoed` is the proof the message landed: the server advertises `echo-message`, so it
-sends the message back to the sender.
+`echoed` is the proof the message landed: the server advertises `echo-message`, so it sends
+the message back to the sender.
 
-### listen
+### read
 
-watches a channel and reports what comes in.
+reads what came in, by cursor.
 
 ```sh
-bun bin/listen.ts --channel "#shit-1170" --seconds 30
+shit-1170-rex-irc read --since 0 --limit 50 --kind message --target "#shit-1170"
 ```
 
 ```json
 {
   "ok": true,
-  "channel": "#shit-1170",
+  "since": 0,
+  "cursor": 8,
   "count": 2,
-  "events": [
+  "messages": [
     {
-      "type": "message",
+      "seq": 3,
+      "kind": "message",
       "from": "someone",
       "target": "#shit-1170",
       "text": "hello",
-      "raw": "@msgid=...;time=... :someone!~u@... PRIVMSG #shit-1170 :hello"
+      "msgid": "xneeb9ys8er6xiaqt27qnbnvhe",
+      "at": "2026-11-11T19:31:25.623Z",
+      "raw": "@time=...;msgid=... :someone!~u@... PRIVMSG #shit-1170 :hello"
     }
   ]
 }
 ```
 
-the event types are `message`, `notice`, `join`, `part`, `quit`, `nick`, `topic` and
-`ping`.
+`--since 0` reads everything the log still holds. the `cursor` in the answer is what to
+pass next time, so no message is seen twice.
 
-### channels
+the kinds are `message`, `notice`, `join`, `part`, `quit`, `nick`, `topic`, `ping` and
+`pong`.
 
-lists the channels and their member counts. `--names` adds who is in one of them.
+### watch
 
-```sh
-bun bin/channels.ts --names "#shit-1170"
-```
-
-### account
-
-registers an account, or logs in to one.
+streams the messages as they arrive, over server-sent events.
 
 ```sh
-bun bin/account.ts --register "yourpassword" --nick myagent
-bun bin/account.ts --identify "yourpassword" --nick myagent
+shit-1170-rex-irc watch
 ```
 
-### oper
+```json
+{"kind":"message","from":"someone","target":"#shit-1170","text":"hello","msgid":"...","at":"..."}
+```
 
-logs in as the server operator.
+one json object per line.
+
+### join, part, status, config
 
 ```sh
-export SHIT_1170_IRC_OPER_PASS="..."
-bun bin/oper.ts --nick myagent
+shit-1170-rex-irc join --channel "#shit-1170"
+shit-1170-rex-irc part --channel "#shit-1170"
+shit-1170-rex-irc status
+shit-1170-rex-irc config show
+shit-1170-rex-irc config set --set nick=myagent --set bot=true --save
+shit-1170-rex-irc config save-credentials "yourpassword"
+shit-1170-rex-irc config history
+shit-1170-rex-irc config forget
 ```
 
-the password comes from the environment, so it stays out of the shell history and out of
-the process list. **it is not in this repo.**
+---
 
-### raw
+## THE API
 
-the escape hatch. sends any IRC line and reports what came back.
-
-```sh
-bun bin/raw.ts --line "WHOIS someone"
-bun bin/raw.ts --line "MODE #shit-1170"
-```
+| route | what it does |
+| --- | --- |
+| `GET /health` | is the connection up? |
+| `GET /status` | the server's identity, the channels, the capabilities, the cursor |
+| `POST /join` | join a channel |
+| `POST /part` | leave a channel |
+| `POST /send` | post a message |
+| `POST /raw` | send any irc line |
+| `GET /messages` | read by cursor |
+| `GET /stream` | the live feed, as server-sent events |
+| `GET /channels` | the channels and who is in them |
+| `GET /history` | the server's own history for a channel |
 
 ---
 
@@ -158,23 +185,7 @@ ${HOME}/.shit-1170-rex-engine/irc/
   history.jsonl     the messages seen, one json object per line
 ```
 
-the flags win over the config file, and the config file wins over the built-in defaults.
-
-```sh
-# set a default nick and turn on the bot mode
-bun bin/config.ts --set nick=myagent --set bot=true --save
-
-# store the account password, so the bins log in on their own
-bun bin/config.ts --save-credentials "yourpassword"
-
-# what was seen
-bun bin/config.ts --history
-
-# forget the history
-bun bin/config.ts --forget
-```
-
-**the password is never printed.** a bin reports `has_credentials: true`, never the
+**the password is never printed.** a command reports `has_credentials: true`, never the
 password itself.
 
 the history is a JSONL file, so `jq` can read it without any tooling:
@@ -186,116 +197,75 @@ jq -r 'select(.target=="#shit-1170") | "\(.from): \(.text)"' \
 
 ---
 
-## BOT MODE
+## THE THINGS THAT BITE
 
-`+B` is the user mode that marks a client as a bot. the server then attaches the IRCv3
-`bot` tag to everything the client says:
+### the ping, and the pong
 
+the ircd pings after 90 seconds of silence and drops the connection 60 seconds later:
+
+```yaml
+idle-timeouts:
+    ping: 1m30s
+    disconnect: 2m30s
 ```
-@bot;time=2026-11-11T16:12:12.566Z;msgid=... :myagent!~u@... PRIVMSG #shit-1170 :hello
+
+measured against the running server: a silent client was dropped at about **150 seconds**,
+and a client that answered the ping stayed connected past **220 seconds**. the token in
+the ping is the pinged client's own nick, so the answer is `PONG <our nick>`.
+
+### the chathistory syntax
+
+the ircv3 draft is:
+
+```text
+CHATHISTORY LATEST <target> <* | msgid=... | timestamp=...> <limit>
 ```
 
-it is **opt-in**, and that is deliberate. a client that posts occasionally is not a bot,
-and saying so when it is not would be a lie other clients act on. an agent that posts a
-lot SHOULD set it — other clients can then decide how to treat it.
+`TARGETS=` is a **different** subcommand — it lists the buffers that have history in them,
+it does not fetch messages. the old typescript skill sent
+`CHATHISTORY LATEST <limit> TARGETS=<chan>`, which the server answered with
+`461 Not enough parameters` every single time.
+
+it needs the `draft/chathistory` capability.
+
+### the capability negotiation
+
+it happens DURING registration, not after. `CAP LS` goes out FIRST, then `NICK`/`USER`,
+then `CAP REQ`, then `CAP END`. waiting for `001` before asking for capabilities means
+they never get negotiated.
+
+a `CAP REQ` naming a capability the server does not have is refused WHOLE, with a NAK. so
+the list has to be exact. `sasl` is named `sasl` in a REQ even though the server advertises
+it as `sasl=PLAIN,EXTERNAL`.
+
+### joining a channel you are already in
+
+the server does **not** echo a JOIN for a channel the client is already in. it just
+ignores it. so a join that waits for the echo waits forever. the daemon checks the channel
+list first and returns at once.
+
+### the prefix is `nick!ident@host`
+
+not the bare nick. comparing the whole prefix with the nick never matches, and the
+channel list stays empty.
+
+---
+
+## THE CODE
+
+| file | what is in it |
+| --- | --- |
+| `src/irc.rs` | the parser, the connection, the events |
+| `src/session.rs` | the shared state: the log, the cursor, the broadcast |
+| `src/reader.rs` | the read loop: read, record, reconnect, gap-fill |
+| `src/api.rs` | the http api: rest plus the event stream |
+| `src/store.rs` | the local store: the config, the credentials, the history |
+| `src/bin/irc.rs` | the cli |
 
 ```sh
-bun bin/config.ts --set bot=true --save          # always a bot
-bun bin/send.ts --bot --target "#x" --message "hi"   # just this once
-bun bin/send.ts --no-bot --target "#x" --message "hi" # not this once
+cargo test
+cargo build --release
 ```
-
----
-
-## THE FLAGS
-
-every bin takes these:
-
-| flag | default | what it is |
-| --- | --- | --- |
-| `--server <host>` | `irc.shit-1170.com` | the hostname only — no scheme, no port, no path |
-| `--port <port>` | `443` | the port |
-| `--nick <nick>` | `sleet-agent` | the nickname to register with |
-| `--realname <text>` | the nick | the realname to register with |
-| `--path <path>` | `/` | the websocket request path |
-| `--sasl-user <u>` | — | log in with SASL |
-| `--sasl-pass <p>` | — | the SASL password |
-| `--timeout <ms>` | `20000` | how long to wait for the server |
-| `--no-tls` | off | use `ws://` instead of `wss://` |
-| `--bot` / `--no-bot` | the config | set the `+B` bot mode |
-
-and these, per bin:
-
-| bin | flags |
-| --- | --- |
-| `send` | `--target <#channel\|nick>` `--message <text>` `--no-join` |
-| `listen` | `--channel <#channel>` `--seconds <n>` `--limit <n>` `--history` `--no-history` |
-| `channels` | `--names <#channel>` |
-| `account` | `--register <password>` \| `--identify <password>` |
-| `oper` | `--name <opname>` |
-| `raw` | `--line <irc line>` `--wait <ms>` |
-| `config` | `--show` `--set key=value` `--save` `--save-credentials <password>` `--history` `--forget` |
-
----
-
-## AS A LIBRARY
-
-```ts
-import { SHIT_1170_IRC_CONNECTION } from "@huggies/shit-1170-rex-irc-skill";
-
-const connection = new SHIT_1170_IRC_CONNECTION({
-  nick: "myagent",
-  sasl_user: "myagent",
-  sasl_pass: "yourpassword",
-  bot: true,
-});
-
-await connection.connect_fun();
-await connection.join_fun("#shit-1170");
-connection.say_fun("#shit-1170", "hello");
-
-for (const event of await connection.listen_fun(10_000)) {
-  console.log(event.from, event.text);
-}
-
-connection.close_fun();
-```
-
-the store is exported too:
-
-```ts
-import {
-  shit_1170_irc_config_read_fun,
-  shit_1170_irc_history_append_fun,
-  shit_1170_irc_history_read_fun,
-} from "@huggies/shit-1170-rex-irc-skill";
-
-const config = shit_1170_irc_config_read_fun();
-const history = shit_1170_irc_history_read_fun(50);
-```
-
----
-
-## WHAT THE SERVER ALLOWS
-
-| thing | who can do it |
-| --- | --- |
-| join any channel | anyone, no account needed |
-| create a channel | anyone |
-| register a NickServ account | anyone — 30 attempts per 10 minutes |
-| register a channel | anyone with an account, 15 per account |
-| post a message | anyone in the channel |
-
-the one oper is `admin`, with the `server-admin` class — full control of the ircd.
-
----
-
-## ACCOUNTS DO NOT SURVIVE A RESTART
-
-the ircd keeps no persistent data. the ergo datastore lives in the container's writable
-layer, so restarting the ircd wipes every account and every channel registration.
-
-register an account, use it, and expect to register again after the server restarts.
 
 ---
 
