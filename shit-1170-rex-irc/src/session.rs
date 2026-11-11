@@ -71,6 +71,13 @@ pub struct Session {
     /// a nick that is already in use is permanent — retrying will not
     /// help — so the reason is kept and reported rather than looping.
     pub registration_error: Mutex<Option<String>>,
+    /// an id for this daemon, unique per run.
+    ///
+    /// two daemons can end up on the same port — the second one fails
+    /// to bind and the client commands then talk to the FIRST one,
+    /// silently, and get its data. so the daemon says who it is, and
+    /// a client can check.
+    pub daemon_id: String,
     /// the channel the read loop takes commands from.
     ///
     /// the read loop owns the socket, so it is the only thing that may
@@ -94,6 +101,7 @@ impl Session {
             reconnects: AtomicU64::new(0),
             connected_at: Mutex::new(None),
             registration_error: Mutex::new(None),
+            daemon_id: crate::store::random_id(),
             commands: Mutex::new(None),
         })
     }

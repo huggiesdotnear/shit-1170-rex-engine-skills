@@ -124,6 +124,10 @@ async fn status(State(session): State_) -> impl IntoResponse {
         // already in use is permanent — the daemon stops rather than
         // looping on it — so the reason has to be here.
         "registration_error": session.registration_error().await,
+        // who this daemon is. two daemons can end up on the same
+        // port, and a client that talks to the wrong one gets the
+        // wrong data without noticing.
+        "daemon_id": session.daemon_id,
     }))
 }
 

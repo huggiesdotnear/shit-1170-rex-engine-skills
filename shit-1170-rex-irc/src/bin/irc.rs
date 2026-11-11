@@ -37,8 +37,40 @@ use shit_1170_rex_irc::store;
 #[derive(Parser)]
 #[command(name = "shit-1170-rex-irc", about = "a long-lived irc client for the shit-1170 server")]
 struct Cli {
+    /// check that the daemon answers with this nickname.
+    ///
+    /// two daemons can end up on the same port, and then the client
+    /// commands talk to the wrong one — silently, with the wrong data.
+    /// with this flag, a mismatch is an error.
+    #[arg(long, global = true)]
+    expect_nick: Option<String>,
+
     #[command(subcommand)]
     command: Command,
+}
+
+impl Cli {
+    /// the port the client commands talk to.
+    ///
+    /// every client subcommand has its own `--api-port`, and the
+    /// daemon itself has none — it IS the daemon.
+    fn api_port(&self) -> u16 {
+        match &self.command {
+            Command::Serve { api_port, .. } => *api_port,
+            Command::Send { api_port, .. }
+            | Command::Read { api_port, .. }
+            | Command::Reply { api_port, .. }
+            | Command::Wait { api_port, .. }
+            | Command::Join { api_port, .. }
+            | Command::Part { api_port, .. }
+            | Command::Who { api_port, .. }
+            | Command::Raw { api_port, .. }
+            | Command::History { api_port, .. }
+            | Command::Watch { api_port, .. }
+            | Command::Status { api_port, .. } => *api_port,
+            Command::Config { .. } => 8787,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -368,6 +400,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let cli = Cli::parse();
+
+    // --- THE IDENTITY CHECK ---
+    // it runs before the command, for every command that talks to a
+    // daemon. `serve` is the daemon itself, so it is skipped.
+    if let Some(expected) = cli.expect_nick.as_deref() {
+        let port = cli.api_port();
+        if let Err(err) = check_daemon(&api_url(port), Some(expected)).await {
+            eprintln!("{err}");
+            std::process::exit(1);
+        }
+    }
 
     match cli.command {
         Command::Serve {
@@ -885,6 +928,40 @@ async fn post(
     let response = reqwest::Client::new().post(&url).json(body).send().await?;
     let value: serde_json::Value = response.json().await?;
     Ok(value)
+}
+
+/// check that the daemon on this port is the one we meant.
+///
+/// --- WHY THIS MATTERS ---
+/// two daemons can end up fighting over the same port. the second one
+/// fails to bind and prints the error to its stderr, but the client
+/// commands then talk to the FIRST one — silently — and get its nick,
+/// its messages and its state. it looks like it worked.
+///
+/// so a caller that knows the nick it expects can say so, and a
+/// mismatch is an error rather than wrong data.
+async fn check_daemon(
+    base: &str,
+    expect_nick: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(expected) = expect_nick else {
+        return Ok(());
+    };
+
+    let status = get(base, "/status").await?;
+    let actual = status
+        .get("nick")
+        .and_then(|n| n.as_str())
+        .unwrap_or("<unknown>");
+
+    if actual != expected {
+        return Err(format!(
+            "the daemon on {base} is {actual}, not {expected}. it is a different daemon — \
+             another one is already on that port. use --api-port to pick the right one."
+        )
+        .into());
+    }
+    Ok(())
 }
 
 /// a tiny url encoder, for the query strings.

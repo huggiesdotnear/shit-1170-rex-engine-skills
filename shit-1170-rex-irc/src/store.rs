@@ -283,6 +283,23 @@ pub fn clear_history() {
     }
 }
 
+/// a short random id, unique per call.
+///
+/// it is used to tell one daemon from another. two daemons can end
+/// up fighting over the same port, and the client commands then talk
+/// to the wrong one without noticing — the worst kind of failure,
+/// because it looks like it worked.
+pub fn random_id() -> String {
+    // the time in nanoseconds, mixed with the process id. it does not
+    // have to be cryptographic — it only has to be different between
+    // two daemons on one machine.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{}-{:x}", nanos, std::process::id())
+}
+
 // =================================================
 // copyright 2026 by sleet.near
 // =================================================
