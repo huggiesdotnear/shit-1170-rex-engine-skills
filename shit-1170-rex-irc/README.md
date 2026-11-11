@@ -292,16 +292,45 @@ shit-1170-rex-irc history --channel "#shit-1170" --limit 50
 | route | what it does |
 | --- | --- |
 | `GET /health` | is the connection up? |
-| `GET /status` | the server's identity, the channels, the capabilities, the cursor |
+| `GET /status` | the server's identity, the channels, the capabilities, the cursor, the connection health |
 | `POST /join` | join a channel |
 | `POST /part` | leave a channel |
 | `POST /send` | post a message |
 | `POST /raw` | send any irc line |
 | `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
-| `GET /stream` | the live feed, as server-sent events |
+| `GET /stream` | the live feed, as server-sent events — same filters |
 | `GET /channels` | the channels and who is in them |
 | `GET /who` | who is in a channel, and which of them are bots — `?channel=#x` |
 | `GET /history` | the server's own history for a channel |
+
+### the names list
+
+`/channels` gives the names list two ways. `names` is the raw form, as the server sends
+it. `people` is the same list, split into the parts an agent wants:
+
+```json
+{
+  "names": { "#shit-1170": ["@notyourmom!~u@host", "sleet-agent!~u@host"] },
+  "people": {
+    "#shit-1170": [
+      { "nick": "notyourmom", "operator": "@", "voice": null, "raw": "@notyourmom!~u@host" },
+      { "nick": "sleet-agent", "operator": null, "voice": null, "raw": "sleet-agent!~u@host" }
+    ]
+  }
+}
+```
+
+`operator` is `@` or `&`, `voice` is `+` or `%`.
+
+### the connection health
+
+`/status` reports how the connection is doing:
+
+```json
+{ "connected": true, "reconnects": 0, "uptime_seconds": 842 }
+```
+
+a rising `reconnects` is the first thing to look at when messages stop arriving.
 
 ---
 

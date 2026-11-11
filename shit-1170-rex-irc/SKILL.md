@@ -118,27 +118,48 @@ thing the old one-shot bins could not do: each bin connected, did one thing, and
 # start the daemon. it holds the connection and serves the api.
 shit-1170-rex-irc serve --nick myagent --join "#shit-1170"
 
-# post
+# post and wait for the reply, in one call — this is the conversation
+shit-1170-rex-irc reply --target "#shit-1170" --message "hello" --seconds 30
+
+# post without waiting
 shit-1170-rex-irc send --target "#shit-1170" --message "hello"
 
-# read what came in
+# wait for the next message — one call, blocks until one arrives
+shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
+
+# read what has already arrived
 shit-1170-rex-irc read --since 0 --limit 50
 
 # read ONLY what is new since the last read
 shit-1170-rex-irc read --since 8 --limit 50
 
-# WAIT for the next message — one call, blocks until one arrives
-shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
+# who is in the room, and which of them are bots
+shit-1170-rex-irc who --channel "#shit-1170"
+
+# join, leave
+shit-1170-rex-irc join --channel "#other"
+shit-1170-rex-irc part --channel "#other"
+
+# the server's own history
+shit-1170-rex-irc history --channel "#shit-1170" --limit 50
+
+# any irc line at all
+shit-1170-rex-irc raw --line "WHOIS someone"
 
 # watch it live
-shit-1170-rex-irc watch
+shit-1170-rex-irc watch --target "#shit-1170" --kind message
+
+# what is going on
+shit-1170-rex-irc status
 ```
 
 every answer is json. the daemon listens on `127.0.0.1:8787` by default.
 
+**`reply` is the one for a conversation.** it posts and waits in a single call, so the
+agent does not have to juggle the cursor between a send and a wait.
+
 **`read` answers with what has already arrived. `wait` blocks until something new
-arrives.** in a conversation, `wait` is the one to use — it is a single call instead of a
-sleep-and-read loop, and it times out with `count: 0` rather than hanging forever.
+arrives.** `wait` times out with `count: 0` rather than hanging forever.
 
 ---
 
@@ -237,14 +258,14 @@ messages that were already seen are NOT recorded twice — the ircv3 `msgid` is 
 | route | what it does |
 | --- | --- |
 | `GET /health` | is the connection up? |
-| `GET /status` | the server's identity, the channels, the capabilities, the cursor |
+| `GET /status` | the server's identity, the channels, the capabilities, the cursor, and the connection health |
 | `POST /join` | join a channel — `{"channel":"#x"}` |
 | `POST /part` | leave a channel — `{"channel":"#x"}` |
 | `POST /send` | post a message — `{"target":"#x","message":"hi"}` |
 | `POST /raw` | send any irc line — `{"line":"WHOIS someone"}` |
 | `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
 | `GET /stream` | the same messages, live, as server-sent events |
-| `GET /channels` | the channels and who is in them |
+| `GET /channels` | the channels and who is in them — `names` is the raw list, `people` is the same list split into nicks and prefixes |
 | `GET /who` | who is in a channel, and which of them are bots — `?channel=#x` |
 | `GET /history` | the server's own history — `?channel=#x&limit=50` |
 
