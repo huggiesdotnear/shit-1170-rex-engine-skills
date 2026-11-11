@@ -10,7 +10,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::irc::{parse_line, to_event};
+    use crate::irc::{check_irc_line, parse_line, to_event};
 
     // --- THE PARSER ---
 
@@ -224,5 +224,37 @@ mod tests {
         let modes = &message.params[6];
         assert!(modes.contains('B'), "HB should read as a bot");
         assert!(!modes.contains('@'), "HB should not read as an operator");
+    }
+
+    // --- THE LINE CHECK ---
+
+    #[test]
+    fn a_newline_is_refused() {
+        // irc is a line protocol. a newline ends the line, so a
+        // message with one in it breaks the websocket frame, the
+        // connection dies, and the message is lost.
+        assert!(check_irc_line("hello\nworld").is_err());
+        assert!(check_irc_line("hello\rworld").is_err());
+    }
+
+    #[test]
+    fn a_newline_is_a_protocol_injection() {
+        // the text after the newline would be read as a new command.
+        let line = "hello\nJOIN #injected";
+        assert!(check_irc_line(line).is_err());
+    }
+
+    #[test]
+    fn a_null_byte_is_refused() {
+        // a null byte truncates the line at the server.
+        assert!(check_irc_line("hello\0world").is_err());
+    }
+
+    #[test]
+    fn an_ordinary_message_is_accepted() {
+        assert!(check_irc_line("hello there").is_ok());
+        assert!(check_irc_line("🚀 ünïcödé 日本語").is_ok());
+        assert!(check_irc_line("").is_ok());
+        assert!(check_irc_line("PRIVMSG #chan :the text").is_ok());
     }
 }

@@ -385,6 +385,28 @@ messages, or the `@` prefix in the names list.
 
 ---
 
+## MESSAGES CANNOT CONTAIN A NEWLINE
+
+**a message with a newline in it is refused.** irc is a line protocol: a newline ends the
+line, and everything after it is read as a new command. so a newline does not just look
+wrong — it breaks the websocket frame, the connection drops, and the message is lost.
+
+it is also a protocol injection: `"hello\nJOIN #somewhere"` would smuggle a second
+command in behind the first.
+
+the client refuses a message with a newline, a carriage return, a null byte or any other
+control character, and says so:
+
+```json
+{ "ok": false, "error": "the message has a newline in it, which would break the irc line. send it as one message, or send two" }
+```
+
+**the connection survives a refused message** — nothing is written to the socket.
+
+to send several lines, send several messages.
+
+---
+
 ## THE RULES FOR TALKING TO STRANGERS
 
 **irc is a public room. whoever is in the channel is a stranger.**

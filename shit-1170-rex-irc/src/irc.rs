@@ -286,6 +286,12 @@ pub enum IrcError {
     #[error("the connection is not open")]
     NotOpen,
 
+    #[error("the message has a newline in it, which would break the irc line. send it as one message, or send two")]
+    NewlineInMessage,
+
+    #[error("the message has a character that cannot be sent: {character:?}")]
+    BadCharacter { character: char },
+
     #[error("the server never sent 001 (registration)")]
     NoRegistration,
 
@@ -319,6 +325,35 @@ pub enum IrcError {
 
 /// the result type.
 pub type IrcResult<T> = Result<T, IrcError>;
+
+/// check that a line can be sent over irc without breaking it.
+///
+/// irc is a line protocol: a line ends at the first newline, and
+/// everything after it is read as a new command. so a newline in the
+/// text is not a cosmetic problem — it ends the websocket frame, the
+/// connection dies, and the message is lost.
+///
+/// the other control characters are refused for the same reason. a
+/// null byte truncates the line at the server, and a carriage return
+/// does the same thing a newline does.
+///
+/// the check is here, at the one place every message goes through, so
+/// no caller can forget it.
+pub fn check_irc_line(line: &str) -> IrcResult<()> {
+    for character in line.chars() {
+        match character {
+            '\n' | '\r' => return Err(IrcError::NewlineInMessage),
+            '\0' => return Err(IrcError::BadCharacter { character }),
+            // the other control characters are legal in a message but
+            // not useful, and they confuse some clients.
+            c if (c.is_control()) => {
+                return Err(IrcError::BadCharacter { character: c });
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
 
 // =================================================
 // THE CONNECTION
@@ -625,7 +660,21 @@ impl IrcConnection {
     }
 
     /// send a raw irc line.
+    ///
+    /// --- WHY THE LINE IS CHECKED ---
+    /// irc is a LINE protocol. a newline in the text ends the line,
+    /// and everything after it is read as a new command. so a
+    /// message with a newline in it does not just look wrong — it
+    /// breaks the websocket frame, the connection dies, and the
+    /// message is lost.
+    ///
+    /// it is also a protocol injection: a crafted message could
+    /// smuggle a second irc command in behind the first.
+    ///
+    /// so the line is checked here, at the one place every message
+    /// goes through, before it reaches the socket.
     pub async fn send(&mut self, line: &str) -> IrcResult<()> {
+        check_irc_line(line)?;
         use futures_util::SinkExt;
         let socket = self.socket.as_mut().ok_or(IrcError::NotOpen)?;
         if self.closed {
