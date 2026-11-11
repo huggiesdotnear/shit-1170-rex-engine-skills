@@ -56,7 +56,7 @@ impl Cli {
     /// daemon itself has none — it IS the daemon.
     fn api_port(&self) -> u16 {
         match &self.command {
-            Command::Serve { api_port, .. } => *api_port,
+            Command::Serve { .. } => 8787,
             Command::Send { api_port, .. }
             | Command::Read { api_port, .. }
             | Command::Reply { api_port, .. }
@@ -114,9 +114,6 @@ enum Command {
         /// a channel to join on connect.
         #[arg(long)]
         join: Vec<String>,
-        /// the port the client subcommands talk to.
-        #[arg(long, default_value = "8787")]
-        api_port: u16,
     },
     /// post a message.
     Send {
@@ -176,6 +173,9 @@ enum Command {
         /// only events for this channel.
         #[arg(long)]
         target: Option<String>,
+        /// only events from this nick.
+        #[arg(long)]
+        from: Option<String>,
         /// drop the events from our own nick.
         #[arg(long)]
         exclude_self: bool,
@@ -425,7 +425,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             no_bot,
             no_tls,
             join,
-            api_port,
         } => {
             let config = store::read_config();
 
@@ -467,10 +466,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let app = api::router(session);
 
-            // the port the client subcommands talk to is the same one
-            // the daemon listens on.
-            let _ = api_port;
-
             let listener = tokio::net::TcpListener::bind(&listen).await?;
             tracing::info!(address = %listen, "the irc daemon is serving");
 
@@ -494,6 +489,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             limit,
             kind,
             target,
+            from,
             exclude_self,
             compact,
             api_port,
@@ -504,6 +500,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if let Some(target) = target {
                 query.push_str(&format!("&target={}", urlencode(&target)));
+            }
+            if let Some(from) = from {
+                query.push_str(&format!("&from={}", urlencode(&from)));
             }
             if exclude_self {
                 query.push_str("&exclude_self=true");

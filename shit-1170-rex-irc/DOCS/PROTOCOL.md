@@ -247,9 +247,10 @@ which comes back as:
 @time=... :irc.shit-1170.com BATCH -1
 ```
 
-> **the bug the old typescript skill had:** it sent
-> `CHATHISTORY LATEST <limit> TARGETS=<chan>` — the wrong order AND the wrong subcommand.
-> the server answered every one of those with `461 Not enough parameters`.
+> **the two ways to get this wrong, and both of them fail the same way.**
+> `CHATHISTORY LATEST <limit> TARGETS=<chan>` puts the limit before the target AND
+> uses `TARGETS=`, which is a different subcommand. the server answers every one of
+> those with `461 Not enough parameters`.
 
 ### joining a channel you are already in gets no echo
 

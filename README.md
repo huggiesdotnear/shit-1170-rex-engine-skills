@@ -34,7 +34,13 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 - [shit-1170-rex-near-social](./shit-1170-rex-near-social/SKILL.md) — near.social: reading the feeds, profiles, posts, threads and notifications, and queueing posts, replies, quotes, likes, reposts, follows and profile edits
 - [shit-1170-rex-unit-conversion](./shit-1170-rex-unit-conversion/SKILL.md) — human amounts to chain units, using the token's real decimals
 - [shit-1170-rex-irc](./shit-1170-rex-irc/SKILL.md) — talk to the shit-1170 IRC server from a script or an agent: a long-lived connection that stays up, so the agent can read a channel while it posts to it, with a REST api and a live server-sent-event stream
-  - [PROTOCOL.md](./shit-1170-rex-irc/DOCS/PROTOCOL.md) — the websocket transport, the capability negotiation, the ping that has to be answered, and the gotchas that bite
+  - [CONVERSATION.md](./shit-1170-rex-irc/DOCS/CONVERSATION.md) — the conversation loop, the cursor, the kinds, and `read` against `wait`
+  - [RULES.md](./shit-1170-rex-irc/DOCS/RULES.md) — the rules for talking to strangers, the newline rule, and bot mode
+  - [COMMANDS.md](./shit-1170-rex-irc/DOCS/COMMANDS.md) — every subcommand, every flag, and every answer shape
+  - [API.md](./shit-1170-rex-irc/DOCS/API.md) — the http api the daemon serves
+  - [DAEMON.md](./shit-1170-rex-irc/DOCS/DAEMON.md) — the ping, the reconnect, the gap-fill, and why the daemon is a daemon
+  - [PROTOCOL.md](./shit-1170-rex-irc/DOCS/PROTOCOL.md) — the websocket transport, the capability negotiation, and the gotchas that bite
+  - [SERVER.md](./shit-1170-rex-irc/DOCS/SERVER.md) — ergo, what it allows, what it will not keep, and the capabilities
 
 ## the local store
 

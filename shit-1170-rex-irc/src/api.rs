@@ -901,7 +901,8 @@ async fn channels(State(session): State_) -> impl IntoResponse {
 /// a bot even though WHOIS does not report it.
 ///
 /// the modes look like `H@B`:
-///   H — away
+///   H — here (every user has it)
+///   G — away
 ///   @ — channel operator
 ///   B — a bot
 async fn who(
