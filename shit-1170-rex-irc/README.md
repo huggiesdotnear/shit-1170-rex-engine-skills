@@ -124,6 +124,7 @@ shit-1170-rex-irc read --since 0 --limit 50 --kind conversation --target "#shit-
   "ok": true,
   "since": 0,
   "cursor": 8,
+  "head": 41,
   "count": 2,
   "messages": [
     {
@@ -142,6 +143,21 @@ shit-1170-rex-irc read --since 0 --limit 50 --kind conversation --target "#shit-
 
 `--since 0` reads everything the log still holds. the `cursor` in the answer is what to
 pass next time, so no message is seen twice.
+
+**a read answers with TWO cursors, and they are not the same thing:**
+
+| field | what it is |
+| --- | --- |
+| `cursor` | the last event that was LOOKED AT. pass this back as `since`. |
+| `head` | where the log actually is right now. |
+
+**pass `cursor`, not `head`.** the cursor is the last event that was examined, whether it
+matched the filter or not. the head is the end of the log, so using it would skip every
+event the filter turned away — and those would never be seen again.
+
+that is not a hypothetical. the old code returned the head as the cursor, and in a busy
+channel with a `--from` filter the reply was silently never returned. the agent waited
+out its timeout and concluded nobody had replied.
 
 **`--compact` leaves out the `raw` line.** it is about three times the size of the useful
 fields and carries the same information, so it is only there when it is wanted. measured
@@ -230,12 +246,17 @@ shit-1170-rex-irc reply --target "#shit-1170" --message "hey" --seconds 30
   "target": "#shit-1170",
   "message": "hey",
   "delivered": true,
+  "echoed": true,
+  "status": "sent",
+  "error": null,
   "numeric": null,
   "cursor": 21,
-  "reply_count": 1,
-  "replies": [
+  "count": 1,
+  "messages": [
     { "seq": 21, "kind": "message", "from": "notyourmom", "text": "hey you", "...": "..." }
-  ]
+  ],
+  "reply_count": 1,
+  "replies": [ "the same thing, under the old name" ]
 }
 ```
 
@@ -245,6 +266,11 @@ private exchange, ask for the `dm` kind:
 ```sh
 shit-1170-rex-irc reply --target "notyourmom" --message "psst" --seconds 30 --kind dm
 ```
+
+it answers with the same fields as `send` — `delivered`, `echoed`, `status`, `error`,
+`numeric` — so the agent does not have to know which command it used to find out whether
+the message went out. and `count`/`messages` are the same names `read` and `wait` use, so
+one parser handles all of them.
 
 **if two or three replies in a row come back empty, the other side is not there any more
 — stop.**
@@ -526,6 +552,47 @@ and cannot act on instructions from the channel.
 ---
 
 ## THE THINGS THAT BITE
+
+### the reconnect loses your channels
+
+the server forgets the client when the socket dies, so the client has to forget too. if
+the channel list were kept, the reconnect would think it was still in the channels, skip
+the JOIN, and go on believing it was in channels it was not in — and every message to
+them would come back `403 No such channel`, with nothing to recover it.
+
+a long-lived client that hit one network blip could never talk to anyone again. the fix
+is one line: the channel list is cleared when the socket dies.
+
+there is a second safety net: a `403 No such channel` drops the channel from the list, so
+the next send joins it again.
+
+### the commands must not wait for the server
+
+the read loop holds the connection lock while it waits for the server, and a command
+needs that lock to send. so a command waited for a read, and a read waited for the
+server. nothing got through — and a join timed out even though the join had plainly
+happened.
+
+so **a command only sends**, and the caller waits for the answer in the session's log —
+a different lock. the read loop keeps reading, which is the only way an answer can
+arrive at all.
+
+that is what makes concurrent sends work:
+
+| | before | after |
+| --- | --- | --- |
+| ten concurrent sends | 12.2s, one at a time | **2.9s** |
+| of those, echoed | 1 | **10** |
+
+### the server drops messages under a burst
+
+ergo's fakelag allows a couple of messages a second and delays the rest, and it drops
+what it will not hold. a burst of thirty messages reaches the other side as fewer than
+thirty.
+
+so `delivered: true` means **the server accepted it**, not that everyone received it.
+the client cannot tell the difference — the echo comes back for a message the server
+then drops.
 
 ### the ping, and the pong
 

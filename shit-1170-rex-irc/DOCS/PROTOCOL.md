@@ -281,6 +281,72 @@ if nick.to_lowercase() == me { ... }
 getting this wrong leaves the channel list empty, and every "am I in this channel?" check
 then fails.
 
+### a newline in a message breaks the websocket
+
+irc is a **line** protocol. a newline ends the line, and everything after it is read as
+a new command.
+
+so a message with a newline in it does not just look wrong — it breaks the websocket
+frame, the connection drops, and the message is lost. the error said
+`websocket error on wss://irc.shit-1170.com:443/`, which says nothing about what caused
+it.
+
+it is also a protocol injection: `"hello\nJOIN #somewhere"` smuggles a second command in
+behind the first.
+
+so the client refuses a message with a newline, a carriage return, a null byte or any
+other control character, and the check lives at the one place every message goes through
+— `send`, before the socket write. the connection survives a refused message; nothing is
+written to the socket.
+
+### a dropped socket takes the channels with it
+
+the server forgets the client when the socket dies. **every** channel is left behind.
+
+so the client has to forget too. if it keeps the channel list, the reconnect thinks it is
+still in the channels, skips the JOIN, and goes on believing it is in channels it is not
+in. every message to one of them comes back `403 No such channel`, and nothing recovers
+it.
+
+the fix is to clear the list when the socket dies:
+
+```rust
+// on the way out of the read loop
+connection.forget_channels();
+```
+
+and there is a second safety net: a `403 No such channel` drops the channel from the
+list, so the next send joins it again.
+
+### the WHO reply carries the bot flag
+
+the `WHO` reply's `352` line carries the user's modes:
+
+```
+352 <me> <channel> <user> <host> <server> <nick> <flags> :<hops> <realname>
+```
+
+the flags are the last-but-one param, and a `B` in them is the bot flag:
+
+- `H` — away
+- `@` — channel operator
+- `B` — a bot
+
+**this is the only way to tell whether someone is a bot.** ergo does not report the bot
+mode in `WHOIS` — there is no `324` mode line — so `WHOIS` cannot tell you, but `WHO`
+can.
+
+### the server drops messages under a burst
+
+ergo's fakelag allows a couple of messages a second and delays the rest, and it drops
+what it will not hold.
+
+measured: thirty messages sent in a burst, with an independent observer client in the
+same channel, reached it as twenty-five. the client faithfully recorded all thirty
+echoes, because the echo comes back for a message the server then drops.
+
+so `delivered: true` means **the server accepted it**, not that everyone received it.
+
 ---
 
 ## THE SERVER
@@ -342,7 +408,7 @@ the only fix is an empty list.
 
 ---
 
-## ONE READER, ONE WRITER
+## ONE READER, AND THE COMMANDS DO NOT WAIT
 
 a websocket is one stream. **if two tasks read it, they race**, and each frame goes to one
 of them. a command that sends `JOIN` and then waits for the JOIN echo would be waiting for
@@ -351,13 +417,46 @@ a frame the other task took.
 so the read loop owns the socket. it reads, and it serves the commands:
 
 ```text
-the http handler ──command channel──▶ the read loop ──▶ the socket
-                                            │
-                                            └──▶ the session log
+the http handler --command channel--> the read loop --> the socket
+                                                |
+                                                +--> the session log
 ```
 
-a command that needs to wait for a reply — a `JOIN`, a `WHATSNEW` — waits inside the read
-loop, because that is the only thing that can see the reply.
+**but a command must not WAIT inside the read loop.** the read loop holds the connection
+lock while it waits for the server, and a command needs that lock to send. so a command
+that waited there would block the reading -- and the answer it was waiting for could
+never be read.
+
+that is not theoretical. it is what made joins time out even though the join had plainly
+happened: the command was waiting for an echo that the read loop was not allowed to read.
+
+so:
+
+- **the read loop reads.** it is the only reader, and it puts every line in the log.
+- **a command only sends.** it answers straight away with the counter it started from.
+- **the caller waits for the answer in the log.** the log is a different lock, so it is
+  not blocked by the read.
+
+```text
+the http handler --command--> read loop --> socket
+       |                            |
+       |                            +--> the raw list and the event log
+       |
+       +-- waits on the log <--------+
+```
+
+and because the command does not hold the lock while it waits, several of them can be in
+flight at once. ten concurrent sends took **2.9s**, against 12.2s when they were
+serialised behind the lock.
+
+**the two counters are separate.** the event log counts events; the raw list counts every
+line the server sent, which is where a command's answer lives -- the echo of a PRIVMSG, or
+a numeric. mixing them up means a command looks in the wrong place for its answer and
+reports no echo at all.
+
+**the echo is matched by its text.** the server echoes a PRIVMSG back with the same text,
+so that is what tells this command's echo apart from another command's. without it the
+first command to see any echo would claim it, and the rest would report none.
 
 ---
 

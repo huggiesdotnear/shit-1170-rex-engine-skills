@@ -27,18 +27,28 @@ shit-1170-rex-irc reply --target "#shit-1170" --message "hey" --seconds 30
   "target": "#shit-1170",
   "message": "hey",
   "delivered": true,
+  "echoed": true,
+  "status": "sent",
+  "error": null,
   "numeric": null,
   "cursor": 21,
-  "reply_count": 1,
-  "replies": [
+  "count": 1,
+  "messages": [
     { "seq": 21, "kind": "message", "from": "notyourmom", "text": "hey you", "...": "..." }
-  ]
+  ],
+  "reply_count": 1,
+  "replies": [ "the same thing, under the old name" ]
 }
 ```
 
 `reply` posts, then blocks until somebody answers. it skips the agent's own message, so
 what comes back is really somebody else's. **repeat it until the conversation is done,
 then stop.**
+
+**it answers with the same fields as `send`** — `delivered`, `echoed`, `status`, `error`,
+`numeric` — so the agent does not have to know which command it used to find out whether
+the message went out. and `count`/`messages` are the same names `read` and `wait` use, so
+one parser handles all of them. `reply_count`/`replies` are kept as aliases.
 
 **do not loop forever.** if two or three replies in a row come back empty, the other side
 is not there any more, so stop.
@@ -51,6 +61,10 @@ shit-1170-rex-irc reply --target "notyourmom" --message "psst" --seconds 30 --ki
 
 `send` and `wait` are still there when you want them apart — to post without waiting, or
 to catch up on what you missed. `reply` is just the two of them in one call.
+
+**a reply can arrive before the wait starts.** that is why `reply` exists: it takes the
+cursor BEFORE it posts, so the answer cannot land in the gap. if you use `send` and `wait`
+apart, pass the cursor — see PAIRING A SEND WITH A WAIT below.
 
 ---
 
@@ -175,6 +189,9 @@ shit-1170-rex-irc read --since 0 --limit 50
 # read ONLY what is new since the last read
 shit-1170-rex-irc read --since 8 --limit 50
 
+# wait for the next message — one call, blocks until one arrives
+shit-1170-rex-irc wait --seconds 30 --kind conversation --from notyourmom
+
 # who is in the room, and which of them are bots
 shit-1170-rex-irc who --channel "#shit-1170"
 
@@ -209,6 +226,9 @@ agent does not have to juggle the cursor between a send and a wait.
 **`read` answers with what has already arrived. `wait` blocks until something new
 arrives.** `wait` times out with `count: 0` rather than hanging forever.
 
+**one parser handles all three.** `read`, `wait` and `reply` all answer with `count` and
+`messages` — the same names — so an agent does not have to know which command it used.
+
 **`--expect-nick` checks that the daemon on the port is the one you meant.** two
 daemons can end up on the same port, and without this the client talks to the wrong one
 and gets its data:
@@ -233,6 +253,22 @@ next time. so the agent reads with the last cursor and never sees the same messa
 
 this is the fix for the old skill's `listen_fun`, which took its baseline at the moment
 it was CALLED and so silently dropped every message that arrived before the call.
+
+**a read answers with TWO cursors, and they are not the same thing:**
+
+| field | what it is |
+| --- | --- |
+| `cursor` | the last event that was LOOKED AT. pass this back as `since`. |
+| `head` | where the log actually is right now. |
+
+**pass `cursor`, not `head`.** the cursor is the last event that was examined, whether it
+matched the filter or not. the head is the end of the log, so using it would skip every
+event the filter turned away — and those would never be seen again, by this caller or any
+later one.
+
+that is not a hypothetical. the old code returned the head as the cursor, and in a busy
+channel with a `--from` filter the reply was silently never returned. the agent waited out
+its timeout and concluded nobody had replied.
 
 **`read` shows everything. `wait` waits for the next thing.** `wait` also skips the
 agent's own messages by default, because the server echoes them back and an echo is not
@@ -295,6 +331,15 @@ shit-1170-rex-irc wait --seconds 30 --since "$CB"
 **or just use `reply`, which does this pairing for you.** it is the same thing with the
 cursor handling inside.
 
+measured with a peer that replies the instant it sees the message:
+
+| form | replies caught |
+| --- | --- |
+| `send` + `wait` with no `--since` | 0 of 3 |
+| `send` + `wait --since cursor_before` | 3 of 3 |
+| `reply` | 3 of 3 |
+
+---
 #### THE KINDS
 
 | kind | what it is |
@@ -308,6 +353,16 @@ cursor handling inside.
 | `nick` | someone changed nick |
 | `topic` | a channel topic changed |
 | `ping` / `pong` | the server's keepalive |
+
+**a `quit` has no target.** the reason is in the text:
+
+```json
+{ "kind": "quit", "from": "quiter-1", "target": null, "text": "connection closed" }
+```
+
+the quit reason used to be read as a channel, which meant a `--target` filter could match
+a quit by its reason text — `wait --target "connection closed"` returned every quit on
+the server. it does not any more.
 
 **`dm` is a direct message, and it is worth telling apart from a channel message.** a DM
 is private: it was meant for the agent and nobody else, so it deserves a different
@@ -326,6 +381,27 @@ the default is `conversation` because `--kind message` is strict: it excludes DM
 agent waiting for a reply with it would never see a private message and would not know
 why. the join, part and quit notices are traffic, not conversation, so they are not in
 the default either.
+
+---
+
+#### MANY SENDS AT ONCE
+
+**the daemon handles concurrent sends.** ten of them at the same time take about three
+seconds, all ten are delivered, and all ten see their own echo.
+
+that is worth knowing because the obvious way to write this — one connection, one command
+at a time — is what makes it slow. the daemon holds one connection and many callers can
+use it at once.
+
+the reason it works: **the read loop is the only thing that reads the socket.** a command
+sends and answers straight away, and the caller waits for the answer in the log. so
+several commands can be in flight without any of them blocking the reading — and the
+reading is the only way an answer can arrive at all.
+
+**the server's fakelag is the limit, not the client.** ergo allows a couple of messages a
+second and delays the rest, so a burst of ten sends gets its echoes back over a second or
+two. the wait window extends while things are still arriving, so a delayed echo is still
+reported as delivered.
 
 ---
 
@@ -373,6 +449,26 @@ a `BATCH`, and the messages inside are put back into the log.
 
 messages that were already seen are NOT recorded twice — the ircv3 `msgid` is what says so.
 
+**the daemon rejoins the channels it was in.** this is not obvious and it matters: the
+server forgets the client when the socket dies, so the client has to forget too. if the
+channel list were kept, the reconnect would think it was still in the channels, skip the
+JOIN, and go on believing it was in channels it was not in — and every message to them
+would come back `403 No such channel`, with nothing to recover it.
+
+a long-lived client that hit one network blip could never talk to anyone again. the fix
+is one line: the channel list is cleared when the socket dies.
+
+there is a second safety net: a `403 No such channel` drops the channel from the list,
+so the next send joins it again.
+
+**the reconnect is visible.** `status` reports `reconnects` and `uptime_seconds`:
+
+```json
+{ "connected": true, "reconnects": 3, "uptime_seconds": 842 }
+```
+
+a rising `reconnects` is the first thing to look at when messages stop arriving.
+
 ---
 
 #### THE API
@@ -381,15 +477,21 @@ messages that were already seen are NOT recorded twice — the ircv3 `msgid` is 
 | --- | --- |
 | `GET /health` | is the connection up? |
 | `GET /status` | the server's identity, the channels, the capabilities, the cursor, and the connection health |
-| `POST /join` | join a channel — `{"channel":"#x"}` |
+| `POST /join` | join a channel — `{"channel":"#x","no_create":true}` |
 | `POST /part` | leave a channel — `{"channel":"#x"}` |
 | `POST /send` | post a message — `{"target":"#x","message":"hi"}` |
 | `POST /raw` | send any irc line — `{"line":"WHOIS someone"}` |
-| `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
-| `GET /stream` | the same messages, live, as server-sent events |
+| `GET /messages` | read by cursor — `?since=0&limit=50&kind=conversation&target=#x&from=nick&exclude_self=true&compact=true` |
+| `GET /stream` | the same messages, live, as server-sent events — same filters |
 | `GET /channels` | the channels and who is in them — `names` is the raw list, `people` is the same list split into nicks and prefixes |
 | `GET /who` | who is in a channel, and which of them are bots — `?channel=#x` |
 | `GET /history` | the server's own history — `?channel=#x&limit=50` |
+
+`GET /messages` takes `compact=true` to leave out the raw irc line. it is about three
+times the size of the useful fields and carries the same information.
+
+`POST /join` takes `no_create: true` to refuse a channel that does not exist, rather
+than creating it.
 
 `POST /send` answers with `echoed: true` when the server echoed the message back. the
 server advertises `echo-message`, so that echo is the proof the message landed.
@@ -593,6 +695,13 @@ whether the message actually landed. `message-tags` means every line carries `ti
   messages per channel.
 - **no history across server restarts.** the ircd keeps messages in memory only.
 - **no filehost.** the `soju.im/filehost` capability is not enabled.
+- **the server drops messages under a burst.** ergo's fakelag allows a couple of
+  messages a second and delays the rest, and it drops what it will not hold. a burst of
+  thirty messages reaches the other side as fewer than thirty. that is the server's rule,
+  not the client's, and the client cannot tell the difference — so `delivered: true` means
+  the server accepted it, not that everyone received it.
+- **the daemon holds one connection.** two daemons are two connections and two nicks. the
+  `--expect-nick` flag exists so a client cannot quietly talk to the wrong one.
 
 ---
 
@@ -606,10 +715,16 @@ whether the message actually landed. `message-tags` means every line carries `ti
 | `src/api.rs` | the http api: rest plus the event stream |
 | `src/store.rs` | the local store: the config, the credentials, the history |
 | `src/bin/irc.rs` | the cli |
+| `src/irc_tests.rs` | the protocol facts, pinned |
+| `src/session_tests.rs` | the cursor and the counters, pinned |
+| `src/integration_tests.rs` | the whole thing, against the real server |
 
 ```sh
 cargo build --release
 cargo test
+
+# the integration tests need the real server
+cargo test -- --ignored --test-threads=1
 ```
 
 =====================

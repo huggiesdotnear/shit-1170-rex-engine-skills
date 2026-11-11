@@ -635,7 +635,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "ok": sent.get("ok").cloned().unwrap_or(json!(true)),
                     "target": target,
                     "message": message,
+                    // --- THE SAME FIELDS AS send ---
+                    // an agent should not have to know which command
+                    // it used to find out whether the message went
+                    // out.
                     "delivered": sent.get("delivered").cloned().unwrap_or(json!(false)),
+                    "echoed": sent.get("echoed").cloned().unwrap_or(json!(false)),
+                    "status": sent.get("status").cloned().unwrap_or(json!("sent")),
+                    "error": sent.get("error").cloned().unwrap_or(json!(null)),
                     "numeric": sent.get("numeric").cloned().unwrap_or(json!(null)),
                     "cursor": cursor,
                     // --- THE SAME SHAPE AS read AND wait ---
