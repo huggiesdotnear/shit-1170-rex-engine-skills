@@ -234,7 +234,23 @@ enum Command {
         api_port: u16,
     },
     /// stream the messages as they arrive.
+    ///
+    /// the filters are the same ones `read` takes. without them the
+    /// stream carries every join and quit on the server, which is
+    /// noise.
     Watch {
+        /// only events of this kind, e.g. `message` or `dm`.
+        #[arg(long)]
+        kind: Option<String>,
+        /// only events for this channel.
+        #[arg(long)]
+        target: Option<String>,
+        /// only events from this nick.
+        #[arg(long)]
+        from: Option<String>,
+        /// drop the events from our own nick.
+        #[arg(long)]
+        exclude_self: bool,
         /// the port the daemon listens on.
         #[arg(long, default_value = "8787")]
         api_port: u16,
@@ -612,9 +628,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&answer)?);
         }
 
-        Command::Watch { api_port } => {
+        Command::Watch {
+            kind,
+            target,
+            from,
+            exclude_self,
+            api_port,
+        } => {
             // the stream is server-sent events.
-            let url = format!("{}/stream", api_url(api_port));
+            let mut query = String::new();
+            if let Some(kind) = &kind {
+                query.push_str(&format!("?kind={}", urlencode(kind)));
+            }
+            if let Some(target) = &target {
+                let sep = if query.is_empty() { "?" } else { "&" };
+                query.push_str(&format!("{sep}target={}", urlencode(target)));
+            }
+            if let Some(from) = &from {
+                let sep = if query.is_empty() { "?" } else { "&" };
+                query.push_str(&format!("{sep}from={}", urlencode(from)));
+            }
+            if exclude_self {
+                let sep = if query.is_empty() { "?" } else { "&" };
+                query.push_str(&format!("{sep}exclude_self=true"));
+            }
+
+            let url = format!("{}/stream{}", api_url(api_port), query);
             let response = reqwest::get(&url).await?;
             let mut stream = response.bytes_stream();
             let mut buffer = String::new();

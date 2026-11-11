@@ -459,15 +459,80 @@ async fn messages(
 }
 
 /// the live stream of messages.
+///
+/// the filters are the same ones `/messages` takes, so a consumer
+/// only sees what it cares about. without them the stream carries
+/// every join and quit on the server, which is noise.
+#[derive(Debug, Deserialize)]
+struct StreamQuery {
+    /// only events of this kind, e.g. `message` or `dm`.
+    #[serde(default)]
+    kind: Option<String>,
+    /// only events for this channel.
+    #[serde(default)]
+    target: Option<String>,
+    /// only events from this nick.
+    #[serde(default)]
+    from: Option<String>,
+    /// drop the events from our own nick.
+    #[serde(default)]
+    exclude_self: Option<bool>,
+}
+
+/// the live stream of messages.
 async fn stream(
     State(session): State_,
+    Query(query): Query<StreamQuery>,
 ) -> Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>> {
     let mut rx = session.tx.subscribe();
+    let me = session.options.nick.to_lowercase();
+
+    // the filters are worked out once, here, so the stream loop does
+    // not have to parse them for every event.
+    let kind = query.kind.clone();
+    let target = query.target.clone().map(|t| t.to_lowercase());
+    let from = query.from.clone().map(|f| f.to_lowercase());
+    let exclude_self = query.exclude_self.unwrap_or(false);
 
     let stream = async_stream::stream! {
         loop {
             match rx.recv().await {
                 Ok(event) => {
+                    // --- THE FILTERS ---
+                    if let Some(kind) = &kind
+                        && &event.kind != kind {
+                        continue;
+                    }
+                    if let Some(target) = &target {
+                        let have = event
+                            .target
+                            .as_ref()
+                            .map(|t| t.to_lowercase() == *target)
+                            .unwrap_or(false);
+                        if !have {
+                            continue;
+                        }
+                    }
+                    if let Some(from) = &from {
+                        let have = event
+                            .from
+                            .as_ref()
+                            .map(|f| f.to_lowercase() == *from)
+                            .unwrap_or(false);
+                        if !have {
+                            continue;
+                        }
+                    }
+                    if exclude_self
+                        && event
+                            .from
+                            .as_ref()
+                            .map(|f| f.to_lowercase() == me)
+                            .unwrap_or(false)
+                    {
+                        continue;
+                    }
+
                     let payload = serde_json::json!({
                         "kind": event.kind,
                         "from": event.from,
