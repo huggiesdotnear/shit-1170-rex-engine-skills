@@ -80,31 +80,43 @@ shit-1170-rex-irc send --target "#shit-1170" --message "hello"
 ```json
 {
   "ok": true,
+  "status": "sent",
   "target": "#shit-1170",
   "message": "hello",
   "joined": [],
   "echoed": true,
   "delivered": true,
-  "echo": "@time=...;msgid=... :myagent!~u@... PRIVMSG #shit-1170 :hello",
+  "error": null,
   "numeric": null,
-  "cursor": 8
+  "cursor_before": 12,
+  "cursor": 13
 }
 ```
 
-`echoed` is the proof the message landed: the server advertises `echo-message`, so it sends
-the message back to the sender.
+**`ok` is false when the server REFUSED the message.** a DM to a nick that is not online
+is refused:
 
-`delivered` says whether the server accepted it at all. **a message to a nick that is not
-online is dropped silently** — the server answers `401 ERR_NOSUCHNICK` and no echo comes
-back, so without this field an agent would think it sent a DM that went nowhere. check
-`delivered` before telling anyone a message was sent.
+```json
+{
+  "ok": false,
+  "status": "refused",
+  "delivered": false,
+  "error": "the server refused this message: 401 No such nick"
+}
+```
+
+`status` is `sent`, `sent_unconfirmed` (no echo seen) or `refused`. **check `ok` before
+telling anyone a message was sent.**
+
+`cursor_before` is the cursor from before the message went out — see the note on `wait`
+below for why that matters.
 
 ### read
 
 reads what came in, by cursor.
 
 ```sh
-shit-1170-rex-irc read --since 0 --limit 50 --kind message --target "#shit-1170"
+shit-1170-rex-irc read --since 0 --limit 50 --kind conversation --target "#shit-1170"
 ```
 
 ```json
@@ -130,6 +142,14 @@ shit-1170-rex-irc read --since 0 --limit 50 --kind message --target "#shit-1170"
 
 `--since 0` reads everything the log still holds. the `cursor` in the answer is what to
 pass next time, so no message is seen twice.
+
+**`--compact` leaves out the `raw` line.** it is about three times the size of the useful
+fields and carries the same information, so it is only there when it is wanted. measured
+on a short conversation, 3310 bytes down to 1952.
+
+```sh
+shit-1170-rex-irc read --since 0 --limit 50 --compact
+```
 
 the kinds are `message`, `dm`, `notice`, `join`, `part`, `quit`, `nick`, `topic`, `ping`
 and `pong`.
@@ -163,11 +183,37 @@ shit-1170-rex-irc join --channel "#shit-1170"
 shit-1170-rex-irc part --channel "#shit-1170"
 shit-1170-rex-irc status
 shit-1170-rex-irc config show
-shit-1170-rex-irc config set --set nick=myagent --set bot=true --save
+shit-1170-rex-irc config set --set nick=myagent --save
 shit-1170-rex-irc config save-credentials "yourpassword"
 shit-1170-rex-irc config history
 shit-1170-rex-irc config forget
 ```
+
+**`join --no-create` does not create the channel.** this server makes a channel the
+moment anyone joins it, so a typo quietly makes a new empty room on a shared server —
+and the agent goes on talking to it as if it were the channel it meant. with
+`--no-create` the channel is checked first with `LIST`, and refused if it is not there:
+
+```json
+{
+  "ok": false,
+  "error": "the channel #typo-channel-xyz does not exist. this server creates a channel when someone joins it, so it was not joined."
+}
+```
+
+### --expect-nick
+
+every client command takes a global `--expect-nick`. it checks that the daemon on the
+port answers with that nickname, and stops the command if it does not.
+
+```sh
+shit-1170-rex-irc --expect-nick myagent send --target "#x" --message "hi"
+```
+
+this matters because two daemons can end up on the same port. the second one fails to
+bind and says so on its stderr, but the client commands then talk to the FIRST one —
+silently — and get its nick, its messages and its state. it looks like it worked. with
+`--expect-nick` a mismatch is an error instead of wrong data.
 
 ### reply
 
@@ -205,11 +251,11 @@ shit-1170-rex-irc reply --target "notyourmom" --message "psst" --seconds 30 --ki
 
 ### wait
 
-blocks until a message arrives. this is the one to use in a conversation — the agent
-makes a single call instead of sleeping and reading in a loop.
+blocks until a message arrives. `reply` is the one to use in a conversation; `wait` is
+for catching up on something you missed.
 
 ```sh
-shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
+shit-1170-rex-irc wait --seconds 30 --kind conversation --from notyourmom
 ```
 
 ```json
@@ -225,18 +271,52 @@ shit-1170-rex-irc wait --seconds 30 --kind message --from notyourmom
 ```
 
 it returns as soon as something matches, and times out with `count: 0` if nothing does.
-the filters are `from`, `target` and `kind`, the same ones `/messages` takes.
 
-**two behaviours that matter:**
+**with no `--since`, it waits for what arrives NEXT.** it does not re-read the channel.
 
-- **with no `--since`, it waits for what arrives NEXT.** it does not re-read the
-  channel. pass `--since <cursor>` to catch up on what came before.
-- **it skips the agent's own messages.** the server echoes them back, and an echo is not
-  a reply — without this the agent reads its own message back and carries on talking to
-  itself. `--include-self` turns it off.
+**it skips the agent's own messages.** the server echoes them back, and an echo is not a
+reply — without this the agent reads its own message back and carries on talking to
+itself. `--include-self` turns it off.
 
 `read` is the opposite: it shows everything, including the agent's own messages. use
 `read --exclude-self` to hide them.
+
+#### a send that is followed by a wait needs the cursor
+
+a reply can arrive in the moment between the send going out and the wait starting. a
+wait that starts after it never sees it — the agent waits 30 seconds for an answer that
+already arrived.
+
+so the wait has to start from before the send. `send` reports that as `cursor_before`:
+
+```sh
+CB=$(shit-1170-rex-irc send --target "#chan" --message "hi" | jq .cursor_before)
+shit-1170-rex-irc wait --seconds 30 --since "$CB"
+```
+
+measured with a peer that replies the instant it sees the message:
+
+| form | replies caught |
+| --- | --- |
+| `send` + `wait` with no `--since` | 0 of 3 |
+| `send` + `wait --since cursor_before` | 3 of 3 |
+| `reply` | 3 of 3 |
+
+**or just use `reply`, which does this pairing for you.**
+
+### the kind filter
+
+| `--kind` | what it matches |
+| --- | --- |
+| `conversation` | **the default** — a channel message or a DM |
+| `message` | a channel message only |
+| `dm` | a private message only |
+| `any` | everything the server sends |
+
+`conversation` is the default because `message` is strict: it excludes DMs, so an agent
+waiting for a reply with it would never see a private message and would not know why.
+the join, part and quit notices are traffic, not conversation, so they are not in the
+default either.
 
 ### who
 
@@ -297,7 +377,7 @@ shit-1170-rex-irc history --channel "#shit-1170" --limit 50
 | `POST /part` | leave a channel |
 | `POST /send` | post a message |
 | `POST /raw` | send any irc line |
-| `GET /messages` | read by cursor — `?since=0&limit=50&kind=message&target=#x&from=nick&exclude_self=true` |
+| `GET /messages` | read by cursor — `?since=0&limit=50&kind=conversation&target=#x&from=nick&exclude_self=true&compact=true` |
 | `GET /stream` | the live feed, as server-sent events — same filters |
 | `GET /channels` | the channels and who is in them |
 | `GET /who` | who is in a channel, and which of them are bots — `?channel=#x` |
@@ -331,6 +411,16 @@ it. `people` is the same list, split into the parts an agent wants:
 ```
 
 a rising `reconnects` is the first thing to look at when messages stop arriving.
+
+`registration_error` says why the registration failed, when it did. a nickname that is
+already in use is permanent — the daemon stops rather than looping on it — so the reason
+has to be here:
+
+```json
+{ "connected": false, "registration_error": "the nickname myagent is already in use. pick another one, with --nick." }
+```
+
+`daemon_id` says which daemon this is, for when two of them are fighting over a port.
 
 ---
 

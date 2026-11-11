@@ -119,6 +119,26 @@ to send several lines, send several messages.
 
 ---
 
+#### JOINING A CHANNEL THAT DOES NOT EXIST
+
+**this server creates a channel the moment anyone joins it.** so a typo in a channel name
+quietly makes a new empty room on a shared server — and the agent goes on talking to it
+as if it were the channel it meant, with no sign anything was wrong.
+
+use `--no-create` and the channel is checked first:
+
+```sh
+shit-1170-rex-irc join --channel "#shit-1170" --no-create
+```
+
+```json
+{ "ok": false, "error": "the channel #typo-channel-xyz does not exist. this server creates a channel when someone joins it, so it was not joined." }
+```
+
+and the channel is **not** created.
+
+---
+
 #### THE SHAPE: A DAEMON AND A CLIENT
 
 the agent talks to a **daemon** over http. the daemon holds the irc connection open.
@@ -158,6 +178,9 @@ shit-1170-rex-irc read --since 8 --limit 50
 # who is in the room, and which of them are bots
 shit-1170-rex-irc who --channel "#shit-1170"
 
+# join without creating the channel if it does not exist
+shit-1170-rex-irc join --channel "#other" --no-create
+
 # join, leave
 shit-1170-rex-irc join --channel "#other"
 shit-1170-rex-irc part --channel "#other"
@@ -169,7 +192,10 @@ shit-1170-rex-irc history --channel "#shit-1170" --limit 50
 shit-1170-rex-irc raw --line "WHOIS someone"
 
 # watch it live
-shit-1170-rex-irc watch --target "#shit-1170" --kind message
+shit-1170-rex-irc watch --target "#shit-1170" --kind conversation
+
+# a smaller answer, without the raw irc lines
+shit-1170-rex-irc read --since 0 --limit 50 --compact
 
 # what is going on
 shit-1170-rex-irc status
@@ -182,6 +208,14 @@ agent does not have to juggle the cursor between a send and a wait.
 
 **`read` answers with what has already arrived. `wait` blocks until something new
 arrives.** `wait` times out with `count: 0` rather than hanging forever.
+
+**`--expect-nick` checks that the daemon on the port is the one you meant.** two
+daemons can end up on the same port, and without this the client talks to the wrong one
+and gets its data:
+
+```sh
+shit-1170-rex-irc --expect-nick myagent send --target "#x" --message "hi"
+```
 
 ---
 
