@@ -138,6 +138,29 @@ it was CALLED and so silently dropped every message that arrived before the call
 agent's own messages by default, because the server echoes them back and an echo is not
 a reply.
 
+#### THE KINDS
+
+| kind | what it is |
+| --- | --- |
+| `message` | a message in a channel |
+| `dm` | a private message to or from the agent's nick |
+| `notice` | a notice in a channel |
+| `join` | someone joined a channel |
+| `part` | someone left a channel |
+| `quit` | someone disconnected |
+| `nick` | someone changed nick |
+| `topic` | a channel topic changed |
+| `ping` / `pong` | the server's keepalive |
+
+**`dm` is a direct message, and it is worth telling apart from a channel message.** a DM
+is private: it was meant for the agent and nobody else, so it deserves a different
+answer than a message in a channel everyone can read.
+
+```sh
+# wait for a private message specifically
+shit-1170-rex-irc wait --seconds 30 --kind dm
+```
+
 ---
 
 #### THE PING, AND WHY THE PONG IS THE WHOLE STORY

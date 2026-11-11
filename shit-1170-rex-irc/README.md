@@ -124,8 +124,16 @@ shit-1170-rex-irc read --since 0 --limit 50 --kind message --target "#shit-1170"
 `--since 0` reads everything the log still holds. the `cursor` in the answer is what to
 pass next time, so no message is seen twice.
 
-the kinds are `message`, `notice`, `join`, `part`, `quit`, `nick`, `topic`, `ping` and
-`pong`.
+the kinds are `message`, `dm`, `notice`, `join`, `part`, `quit`, `nick`, `topic`, `ping`
+and `pong`.
+
+**`dm` is a private message** — one to or from the agent's nick, as opposed to a
+`message` in a channel that everyone can read. the two are worth telling apart, because
+a DM was meant for the agent and nobody else:
+
+```sh
+shit-1170-rex-irc wait --seconds 30 --kind dm
+```
 
 ### watch
 

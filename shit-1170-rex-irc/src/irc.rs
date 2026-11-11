@@ -226,13 +226,27 @@ pub fn to_event(message: &IrcMessage) -> Option<IrcEvent> {
         _ => message.params.first().cloned(),
     };
 
+    // --- IS IT A DIRECT MESSAGE? ---
+    // a channel starts with the channel type character, which is `#`
+    // on this server (see the CHANTYPES isupport token). anything
+    // else — a nick — is a direct message.
+    //
+    // this matters because an agent has to be able to tell the two
+    // apart. a DM is private and deserves a different answer than a
+    // message in a channel that everyone can read.
+    let is_dm = matches!(kind, "message" | "notice")
+        && target
+            .as_ref()
+            .map(|t| !t.starts_with('#'))
+            .unwrap_or(false);
+
     let text = match kind {
         "join" | "nick" | "ping" | "pong" => None,
         _ => text,
     };
 
     Some(IrcEvent {
-        kind: kind.to_string(),
+        kind: if is_dm { "dm".to_string() } else { kind.to_string() },
         from: nick,
         target,
         text,

@@ -126,6 +126,46 @@ mod tests {
         assert_eq!(event.target.as_deref(), Some("probe-alpha-7"));
     }
 
+    // --- THE DIRECT MESSAGE DISTINCTION ---
+
+    #[test]
+    fn a_message_to_a_channel_is_a_message() {
+        let message = parse_line(
+            "@msgid=abc :peer!~u@host PRIVMSG #rust-test :hello",
+        );
+        let event = to_event(&message).expect("a privmsg is an event");
+        assert_eq!(event.kind, "message");
+        assert_eq!(event.target.as_deref(), Some("#rust-test"));
+    }
+
+    #[test]
+    fn a_message_to_a_nick_is_a_dm() {
+        // a channel starts with the channel type character. anything
+        // else is a nick, and a message to a nick is a direct
+        // message — which an agent has to be able to tell apart from
+        // a channel message, because a DM is private.
+        let message = parse_line("@msgid=abc :notyourmom!~u@host PRIVMSG sleet-agent :psst");
+        let event = to_event(&message).expect("a privmsg is an event");
+        assert_eq!(event.kind, "dm");
+        assert_eq!(event.from.as_deref(), Some("notyourmom"));
+        assert_eq!(event.target.as_deref(), Some("sleet-agent"));
+        assert_eq!(event.text.as_deref(), Some("psst"));
+    }
+
+    #[test]
+    fn a_notice_to_a_nick_is_a_dm() {
+        let message = parse_line(":notyourmom!~u@host NOTICE sleet-agent :heads up");
+        let event = to_event(&message).expect("a notice is an event");
+        assert_eq!(event.kind, "dm");
+    }
+
+    #[test]
+    fn a_notice_to_a_channel_stays_a_notice() {
+        let message = parse_line(":server!~u@host NOTICE #rust-test :heads up");
+        let event = to_event(&message).expect("a notice is an event");
+        assert_eq!(event.kind, "notice");
+    }
+
     // --- THE CHATHISTORY SYNTAX ---
 
     #[test]
