@@ -253,7 +253,9 @@ async fn send_and_wait(
             Ok(Ok(_)) => {
                 // keep going until the deadline, or until the reply
                 // looks complete.
-                if connection.messages.len() > before && reply_looks_done(&connection.messages[before..]) {
+                if connection.messages.len() > before
+                    && reply_looks_done(&connection.messages[before..], &connection.options.nick)
+                {
                     break;
                 }
             }
@@ -281,20 +283,49 @@ async fn send_and_wait(
 
 /// does this batch of replies look finished?
 ///
+/// `nick` is our own nickname, so the echo of our own message can be
+/// told apart from traffic that happened to arrive while we waited.
+///
 /// the server sends the answer to a command and then nothing else, so
 /// a short quiet period after the first reply means the answer is
 /// complete. the timeout in `send_and_wait` is the real bound; this
 /// just makes the common case return sooner.
-fn reply_looks_done(messages: &[IrcMessage]) -> bool {
-    messages
+fn reply_looks_done(messages: &[IrcMessage], nick: &str) -> bool {
+    // a closed batch means the whole batch arrived.
+    if messages
         .iter()
         .any(|m| m.command == "BATCH" && m.params.get(1) == Some(&"-".to_string()))
-        || messages.iter().any(|m| {
-            matches!(
-                m.command.as_str(),
-                "401" | "403" | "404" | "421" | "461" | "462" | "464" | "465" | "366"
-            )
-        })
+    {
+        return true;
+    }
+
+    // an error numeric means the server said no, and there is nothing
+    // more to come.
+    if messages.iter().any(|m| {
+        matches!(
+            m.command.as_str(),
+            "401" | "403" | "404" | "421" | "461" | "462" | "464" | "465" | "366"
+        )
+    }) {
+        return true;
+    }
+
+    // --- THE ECHO OF OUR OWN MESSAGE ---
+    // the server advertises `echo-message`, so a PRIVMSG we sent
+    // comes straight back. that echo IS the answer, and waiting for
+    // more after it just burns the timeout.
+    //
+    // the echo is from OUR OWN nick. a PRIVMSG from somebody else is
+    // not the answer to our command — it is just traffic that
+    // happened to arrive while we waited — so it must not end the
+    // wait.
+    messages.iter().any(|m| {
+        m.command == "PRIVMSG"
+            && m.prefix
+                .as_ref()
+                .map(|p| p.split('!').next().unwrap_or(p) == nick)
+                .unwrap_or(false)
+    })
 }
 
 /// join a channel and wait for the JOIN echo.
