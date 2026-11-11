@@ -147,6 +147,13 @@ enum Command {
         /// drop the events from our own nick.
         #[arg(long)]
         exclude_self: bool,
+        /// leave out the raw irc line.
+        ///
+        /// the raw line is about three times the size of the useful
+        /// fields and carries the same information. this keeps the
+        /// answer small when the raw line is not needed.
+        #[arg(long)]
+        compact: bool,
         /// the port the daemon listens on.
         #[arg(long, default_value = "8787")]
         api_port: u16,
@@ -156,6 +163,13 @@ enum Command {
         /// the channel.
         #[arg(long)]
         channel: String,
+        /// do not create the channel if it does not exist.
+        ///
+        /// this server creates a channel the moment anyone joins it,
+        /// so a typo quietly makes a new empty room — and the agent
+        /// goes on talking to it as if it were the channel it meant.
+        #[arg(long)]
+        no_create: bool,
         /// the port the daemon listens on.
         #[arg(long, default_value = "8787")]
         api_port: u16,
@@ -438,6 +452,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             kind,
             target,
             exclude_self,
+            compact,
             api_port,
         } => {
             let mut query = format!("?since={since}&limit={limit}");
@@ -450,12 +465,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if exclude_self {
                 query.push_str("&exclude_self=true");
             }
+            if compact {
+                query.push_str("&compact=true");
+            }
             let answer = get(&api_url(api_port), &format!("/messages{query}")).await?;
             println!("{}", serde_json::to_string_pretty(&answer)?);
         }
 
-        Command::Join { channel, api_port } => {
-            let body = json!({ "channel": channel });
+        Command::Join {
+            channel,
+            no_create,
+            api_port,
+        } => {
+            let body = json!({ "channel": channel, "no_create": no_create });
             let answer = post(&api_url(api_port), "/join", &body).await?;
             println!("{}", serde_json::to_string_pretty(&answer)?);
         }

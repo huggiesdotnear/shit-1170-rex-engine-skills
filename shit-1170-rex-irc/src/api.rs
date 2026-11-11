@@ -21,7 +21,7 @@
 // every answer is json.
 // =================================================
 
-use crate::irc::{names, numerics, to_event, IrcMessage};
+use crate::irc::{names, numerics, to_event, IrcError, IrcMessage};
 use crate::session::Session;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -131,12 +131,41 @@ async fn status(State(session): State_) -> impl IntoResponse {
 #[derive(Debug, Deserialize)]
 struct JoinRequest {
     channel: String,
+    /// do not create the channel if it does not exist.
+    ///
+    /// this server creates a channel the moment anyone joins it, so a
+    /// typo in a channel name quietly makes a new empty room — and
+    /// the agent goes on talking to it as if it were the channel it
+    /// meant.
+    #[serde(default)]
+    no_create: bool,
 }
 
 async fn join(
     State(session): State_,
     Json(request): Json<JoinRequest>,
 ) -> axum::response::Response {
+    // --- THE CHANNEL HAS TO EXIST ---
+    // `LIST <channel>` answers with a `322` for a channel that exists
+    // and with nothing for one that does not. asking first means a
+    // typo does not create a channel on a shared server.
+    if request.no_create {
+        match channel_exists(&session, &request.channel).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return fail(
+                    StatusCode::NOT_FOUND,
+                    format!(
+                        "the channel {} does not exist. this server creates a channel when \
+                         someone joins it, so it was not joined.",
+                        request.channel
+                    ),
+                );
+            }
+            Err(err) => return fail(StatusCode::BAD_GATEWAY, err),
+        }
+    }
+
     let (reply, wait) = tokio::sync::oneshot::channel();
     let command = crate::reader::Command::Join {
         channel: request.channel.clone(),
@@ -162,6 +191,30 @@ async fn join(
         Ok(Err(err)) => fail(StatusCode::BAD_GATEWAY, err),
         Err(_) => fail(StatusCode::BAD_GATEWAY, "the read loop went away"),
     }
+}
+
+/// does this channel exist on the server?
+///
+/// `LIST <channel>` answers with a `322` for a channel that exists
+/// and with nothing for one that does not.
+async fn channel_exists(session: &Arc<Session>, channel: &str) -> Result<bool, IrcError> {
+    let (reply, wait) = tokio::sync::oneshot::channel();
+    let command = crate::reader::Command::Send {
+        line: format!("LIST {channel}"),
+        wait_ms: 1500,
+        reply,
+    };
+    session.command(command).await?;
+
+    let replies = match wait.await {
+        Ok(Ok(replies)) => replies,
+        Ok(Err(err)) => return Err(err),
+        Err(_) => {
+            return Err(IrcError::NotOpen);
+        }
+    };
+
+    Ok(replies.iter().any(|m| m.command == "322"))
 }
 
 /// leave a channel.
@@ -448,6 +501,13 @@ struct MessagesQuery {
     /// does not want its own message — that is not a reply.
     #[serde(default)]
     exclude_self: Option<bool>,
+    /// leave out the raw irc line.
+    ///
+    /// the raw line is about three times the size of the useful
+    /// fields, and it carries the same information they do. it is
+    /// here when it is needed and out of the way when it is not.
+    #[serde(default)]
+    compact: Option<bool>,
 }
 
 async fn messages(
@@ -457,6 +517,7 @@ async fn messages(
     let since = query.since.unwrap_or(0);
     let limit = query.limit.unwrap_or(200).min(2000);
     let me = session.options.nick.to_lowercase();
+    let compact = query.compact.unwrap_or(false);
 
     let entries = session.since(since, limit * 4).await;
 
@@ -506,16 +567,30 @@ async fn messages(
         })
         .take(limit)
         .map(|entry| {
-            serde_json::json!({
-                "seq": entry.seq,
-                "kind": entry.event.kind,
-                "from": entry.event.from,
-                "target": entry.event.target,
-                "text": entry.event.text,
-                "msgid": entry.event.msgid,
-                "at": entry.event.at,
-                "raw": entry.event.raw,
-            })
+            if compact {
+                // without the raw line. the other fields carry the
+                // same information.
+                serde_json::json!({
+                    "seq": entry.seq,
+                    "kind": entry.event.kind,
+                    "from": entry.event.from,
+                    "target": entry.event.target,
+                    "text": entry.event.text,
+                    "msgid": entry.event.msgid,
+                    "at": entry.event.at,
+                })
+            } else {
+                serde_json::json!({
+                    "seq": entry.seq,
+                    "kind": entry.event.kind,
+                    "from": entry.event.from,
+                    "target": entry.event.target,
+                    "text": entry.event.text,
+                    "msgid": entry.event.msgid,
+                    "at": entry.event.at,
+                    "raw": entry.event.raw,
+                })
+            }
         })
         .collect();
 
