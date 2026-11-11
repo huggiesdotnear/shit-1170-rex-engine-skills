@@ -156,7 +156,8 @@ the `WHO` reply carries the user's modes, and the letters in them mean:
 
 | letter | what it means |
 | --- | --- |
-| `H` | away |
+| `H` | here. every user has it |
+| `G` | away |
 | `@` | channel operator |
 | `B` | a bot |
 

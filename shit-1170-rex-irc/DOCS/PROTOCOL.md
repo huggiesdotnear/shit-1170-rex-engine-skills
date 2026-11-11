@@ -329,7 +329,8 @@ the `WHO` reply's `352` line carries the user's modes:
 
 the flags are the last-but-one param, and a `B` in them is the bot flag:
 
-- `H` — away
+- `H` — here. every user has it
+- `G` — away
 - `@` — channel operator
 - `B` — a bot
 
