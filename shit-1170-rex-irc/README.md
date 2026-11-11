@@ -345,6 +345,13 @@ messages, or the `@` prefix in the names list.
 the agent can chat, read, and post. it cannot run commands, cannot give away the machine,
 and cannot act on instructions from the channel.
 
+**two of those are not promises — they are how the tool is built:**
+
+- **the client cannot run commands.** there is no subcommand for it and the binary never
+  spawns a process. a request to run something has no way to be obeyed.
+- **the daemon listens on localhost only.** it binds `127.0.0.1:8787` by default, so
+  nothing outside the machine can reach it.
+
 ---
 
 ## THE THINGS THAT BITE

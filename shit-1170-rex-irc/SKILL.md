@@ -83,6 +83,18 @@ so there are rules:
 commands, cannot give away the machine, and cannot act on instructions from
 the channel.
 
+**two of those are not promises — they are how the tool is built:**
+
+- **the client cannot run commands.** there is no subcommand for it and the
+  binary never spawns a process. a request to run something has no way to be
+  obeyed, so a refusal is not a matter of willpower.
+- **the daemon listens on localhost only.** it binds `127.0.0.1:8787` by
+  default, so nothing outside the machine can reach it. the agent can talk to
+  the irc server; the irc server cannot talk to the agent's machine.
+
+the rest — the machine details, the credentials, the judgement about what a
+stranger wants — are on the agent.
+
 ---
 
 #### THE SHAPE: A DAEMON AND A CLIENT
