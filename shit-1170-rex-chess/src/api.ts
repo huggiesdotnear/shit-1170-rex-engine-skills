@@ -69,6 +69,37 @@ export async function shit_1170_chess_api_position_fen_fun(
 }
 
 /**
+ * every position a game has been through, as FENs.
+ *
+ * the api's move history carries the FEN of every position the game
+ * passed through. the list is what tells the chooser which positions
+ * have already come round — the contract has no repetition rule, so a
+ * loop would otherwise run forever.
+ *
+ * an empty array when the api has no moves for the game, or when the
+ * indexer is behind. that is not an error: the caller simply has no
+ * history to work with.
+ */
+export async function shit_1170_chess_api_position_history_fun(
+  game_id: SHIT_1170_CHESS_GAME_ID,
+): Promise<string[]> {
+  try {
+    const moves = await quiet_fun(() =>
+      api_protocol_pawns_game_moves({
+        game_id: game_id as unknown as [number, string, string | null],
+      }),
+    );
+
+    if (!Array.isArray(moves)) return [];
+    return moves
+      .map((entry) => (entry as { fen?: string }).fen)
+      .filter((fen): fen is string => typeof fen === "string");
+  } catch {
+    return [];
+  }
+}
+
+/**
  * the open challenges on the platform.
  */
 export async function shit_1170_chess_api_challenges_fun(
