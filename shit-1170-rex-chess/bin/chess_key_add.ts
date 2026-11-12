@@ -10,21 +10,26 @@
 // is already there.
 //
 // --- THE COMMAND ---
-//   bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 0
+//   bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 1000000000000000000000000
 //
 // no method names means EVERY method on that contract, which is the
-// whole-contract scope. --allowance 0 because a game call attaches no
-// deposit, so the key needs no allowance.
+// whole-contract scope.
+//
+// the ALLOWANCE is not the deposit. it is the prepaid gas —
+// gas_limit x gas_price — and mainnet's gas price is 1000000000
+// yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR of
+// allowance before the contract is reached at all. 1 NEAR covers every
+// call this skill makes.
 //
 // the NARROWER key is one flag away:
 //
 //   bun bin/key_queue_add.ts \
 //     --receiver-id app.chess-game.near \
-//     --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent \
-//     --allowance 0
+//     --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent,join_matchmaking,cancel_matchmaking,create_ai_game \
+//     --allowance 1000000000000000000000000
 //
 // that keeps every game operation and drops the money-shaped methods —
-// `withdraw_token` and `cancel_bet`.
+// `withdraw_token`, `cancel_bet` and the NEP-141 surface.
 //
 // --- WHY THE HUMAN SIGNS IT ---
 // a key that a human approves cannot be created by a compromised
@@ -40,6 +45,10 @@ import {
   shit_1170_chess_network_fun,
 } from "../src/cli";
 import { SHIT_1170_CHESS_CONTRACT_ID } from "../src/chain";
+import {
+  shit_1170_chess_key_command_fun,
+  shit_1170_chess_key_whole_contract_command_fun,
+} from "../src/payload";
 import {
   shit_1170_chess_key_details_fun,
   shit_1170_chess_held_secrets_fun,
@@ -92,10 +101,8 @@ await shit_1170_chess_main_fun(async () => {
     // the commands the HUMAN runs. the keys skill queues them and the
     // human signs them in the web app.
     commands: {
-      whole_contract:
-        "bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 0",
-      narrower:
-        "bun bin/key_queue_add.ts --receiver-id app.chess-game.near --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent --allowance 0",
+      whole_contract: shit_1170_chess_key_whole_contract_command_fun(),
+      narrower: shit_1170_chess_key_command_fun(),
     },
     what: `Add a limited access key for ${SHIT_1170_CHESS_CONTRACT_ID} to ${account_id}`,
     why: "the agent signs its own moves with it, so the human approves the key once and the agent plays on its own",

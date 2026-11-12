@@ -34,13 +34,17 @@
 // move the money, and no amount of care in this file would stop that.
 
 import { Database } from "bun:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { Near } from "near-kit";
 
 import { SHIT_1170_CHESS_CONTRACT_ID } from "./chain";
+import {
+  SHIT_1170_CHESS_KEY_ALLOWANCE,
+  SHIT_1170_CHESS_KEY_METHODS,
+} from "./payload";
 import type { SHIT_1170_CHESS_QUEUE_CALL } from "./types";
 
 // --- WHERE THE KEYS SKILL'S STORE IS ---
@@ -149,6 +153,9 @@ export function shit_1170_chess_key_details_fun(
   public_key: string;
   receiver_id: string | null;
   method_names: string[];
+  allowance: string | null;
+  action: string | null;
+  offered_at: number;
 }[] {
   const added_dir = shit_1170_keys_added_dir_fun();
 
@@ -164,24 +171,31 @@ export function shit_1170_chess_key_details_fun(
     public_key: string;
     receiver_id: string | null;
     method_names: string[];
+    allowance: string | null;
+    action: string | null;
+    offered_at: number;
   }[] = [];
 
   for (const file of files) {
     if (!file.endsWith(".json")) continue;
     try {
-      const parsed = JSON.parse(
-        readFileSync(join(added_dir, file), "utf8"),
-      ) as {
+      const path = join(added_dir, file);
+      const parsed = JSON.parse(readFileSync(path, "utf8")) as {
         public_key?: string;
         account_id?: string;
         receiver_id?: string | null;
         method_names?: string[];
+        allowance?: string | null;
+        action?: string | null;
       };
       if (parsed.account_id !== account_id) continue;
       details.push({
         public_key: parsed.public_key ?? "",
         receiver_id: parsed.receiver_id ?? null,
         method_names: parsed.method_names ?? [],
+        allowance: parsed.allowance ?? null,
+        action: parsed.action ?? null,
+        offered_at: statSync(path).mtimeMs,
       });
     } catch {
       // a file that cannot be read is not a reason to refuse the rest.
@@ -199,19 +213,46 @@ export function shit_1170_chess_key_details_fun(
  *   - held by the agent (its private key is in the store)
  *   - offered to THIS account
  *   - scoped to the chess contract
+ *   - still on the account (a key that was removed is not a key)
  *
  * a key with a method list that does not include `play_move` cannot
  * play, so it is not the key for this skill.
+ *
+ * --- WHICH KEY, WHEN THERE ARE SEVERAL ---
+ * the newest usable one wins. an account accumulates keys over time,
+ * and an older key that was replaced is still in the store. the
+ * records are ordered by when they were written, so the most recently
+ * offered key is the one that is tried first — and the older ones are
+ * the fallback, not the first choice.
  */
 export function shit_1170_chess_signer_find_fun(
   account_id: string,
 ): SHIT_1170_CHESS_SIGNER {
   const details = shit_1170_chess_key_details_fun(account_id);
-  const chess_details = details.filter(
+  const all_chess = details.filter(
     (detail) => detail.receiver_id === SHIT_1170_CHESS_CONTRACT_ID,
   );
+  const saw_removed =
+    all_chess.length > 0 &&
+    all_chess.every((detail) => detail.action === "delete_key");
+  const chess_details = all_chess
+    .filter((detail) => detail.action !== "delete_key")
+    // newest first: the key offered most recently is the one in use.
+    // the order is the file's mtime, NOT the order the directory
+    // happens to be read in — that is not the same thing, and it is
+    // not guaranteed.
+    .sort((a, b) => b.offered_at - a.offered_at);
 
   if (chess_details.length === 0) {
+    // every key this account had was taken back off it.
+    if (saw_removed) {
+      throw new SHIT_1170_CHESS_SIGNER_ERROR(
+        `the key for ${SHIT_1170_CHESS_CONTRACT_ID} was offered to ${account_id} ` +
+          `and then removed from it. the human signs a new one — the keys skill ` +
+          `queues it with key_queue_add.ts --receiver-id ${SHIT_1170_CHESS_CONTRACT_ID}.`,
+      );
+    }
+
     throw new SHIT_1170_CHESS_SIGNER_ERROR(
       `no key for ${SHIT_1170_CHESS_CONTRACT_ID} was offered to ${account_id}. ` +
         `the human signs the add_key — the keys skill queues it with ` +
@@ -223,6 +264,9 @@ export function shit_1170_chess_signer_find_fun(
     chess_details.map((detail) => detail.public_key),
   );
 
+  let saw_wrong_methods = false;
+  let saw_no_allowance = false;
+
   for (const detail of chess_details) {
     const secret = secrets.get(detail.public_key);
     if (!secret) continue;
@@ -231,6 +275,15 @@ export function shit_1170_chess_signer_find_fun(
       detail.method_names.length > 0 &&
       !detail.method_names.includes("play_move")
     ) {
+      saw_wrong_methods = true;
+      continue;
+    }
+
+    // the allowance covers the PREPAID GAS, not the deposit. a key
+    // with an allowance of 0 cannot make any call: the contract
+    // refuses it with NotEnoughAllowance before the call runs.
+    if (detail.allowance !== null && BigInt(detail.allowance) === 0n) {
+      saw_no_allowance = true;
       continue;
     }
 
@@ -241,6 +294,31 @@ export function shit_1170_chess_signer_find_fun(
       receiver_id: SHIT_1170_CHESS_CONTRACT_ID,
       method_names: detail.method_names,
     };
+  }
+
+  // the key cannot call the methods the skill needs.
+  if (saw_wrong_methods) {
+    throw new SHIT_1170_CHESS_SIGNER_ERROR(
+      `the key for ${SHIT_1170_CHESS_CONTRACT_ID} was offered to ${account_id} ` +
+        `without the methods this skill calls. a key that cannot call ` +
+        `play_move cannot play. the human signs a key with the full list — ` +
+        `the keys skill queues it with key_queue_add.ts --receiver-id ` +
+        `${SHIT_1170_CHESS_CONTRACT_ID} --methods ` +
+        `${SHIT_1170_CHESS_KEY_METHODS.join(",")} --allowance ` +
+        `${SHIT_1170_CHESS_KEY_ALLOWANCE}.`,
+    );
+  }
+
+  // the key cannot cover the prepaid gas.
+  if (saw_no_allowance) {
+    throw new SHIT_1170_CHESS_SIGNER_ERROR(
+      `the key for ${SHIT_1170_CHESS_CONTRACT_ID} was offered to ${account_id} ` +
+        `with an allowance of 0. the allowance covers the PREPAID GAS, not the ` +
+        `deposit — a 30 Tgas call needs 0.03 NEAR of it. the human signs a key ` +
+        `with a real allowance — the keys skill queues it with ` +
+        `key_queue_add.ts --receiver-id ${SHIT_1170_CHESS_CONTRACT_ID} ` +
+        `--allowance ${SHIT_1170_CHESS_KEY_ALLOWANCE}.`,
+    );
   }
 
   throw new SHIT_1170_CHESS_SIGNER_ERROR(

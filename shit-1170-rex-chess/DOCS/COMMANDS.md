@@ -286,11 +286,14 @@ bun bin/chess_key_add.ts --account kcameau.near
   ],
   "has_signing_key": true,
   "commands": {
-    "whole_contract": "bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 0",
-    "narrower": "bun bin/key_queue_add.ts --receiver-id app.chess-game.near --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent --allowance 0"
+    "whole_contract": "bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 1000000000000000000000000",
+    "narrower": "bun bin/key_queue_add.ts --receiver-id app.chess-game.near --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent,join_matchmaking,cancel_matchmaking,create_ai_game --allowance 1000000000000000000000000"
   }
 }
 ```
+
+**the allowance covers the prepaid gas**, not the deposit — a 30 Tgas
+call needs 0.03 NEAR of it, so an allowance of 0 makes every call fail.
 
 **this bin never signs anything.** the keys skill queues the add_key
 and the human approves it.

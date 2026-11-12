@@ -110,9 +110,22 @@ and drops the money-shaped methods:
 ```sh
 bun bin/key_queue_add.ts \
   --receiver-id app.chess-game.near \
-  --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent \
-  --allowance 0
+  --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent,join_matchmaking,cancel_matchmaking,create_ai_game \
+  --allowance 1000000000000000000000000
 ```
+
+**the allowance is the PREPAID GAS, not the deposit.** the contract
+takes `gas_limit x gas_price` from the key's allowance before the call
+runs. mainnet's gas price is 1000000000 yoctoNEAR per gas unit, so the
+largest call this skill makes — 400 Tgas, against a VeryHard ai —
+needs 0.40 NEAR of allowance. an allowance of 0 is refused with
+`NotEnoughAllowance` before the contract is reached at all.
+
+**the method list is the whole skill.** `join_matchmaking` and
+`cancel_matchmaking` are how the daemon finds a game, and
+`create_ai_game` is how a game against the ai is opened. a key without
+them cannot do those, and the contract refuses the call with
+`MethodNameMismatch`.
 
 **the key is queued, not signed**, so the choice stays open until a
 human approves it. `chess_key_add.ts` shows both commands.

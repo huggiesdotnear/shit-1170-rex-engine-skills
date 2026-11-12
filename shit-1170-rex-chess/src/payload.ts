@@ -90,6 +90,85 @@ export const SHIT_1170_CHESS_ONE_YOCTO = "1";
 export const SHIT_1170_CHESS_STORAGE_DEPOSIT =
   "50000000000000000000000";
 
+// --- THE LIMITED ACCESS KEY ---
+//
+// the methods the agent's key may call on the chess contract, and the
+// allowance it needs.
+//
+// --- THE METHOD LIST ---
+// every method this skill calls, minus the ones that move money.
+// `withdraw_token`, `cancel_bet`, `ft_transfer` and `ft_transfer_call`
+// are on the contract and are NOT here: a token deposit moves money, and
+// the human signs every one of those.
+//
+// the list covers the whole skill: the game methods, the challenge
+// methods, the matchmaking methods and `create_ai_game`. a key that
+// leaves one of them out is refused by the contract with
+// `MethodNameMismatch`, so the list is complete on purpose.
+//
+// --- THE ALLOWANCE ---
+// the allowance is NOT the deposit. it is the prepaid gas:
+// `gas_limit x gas_price`, and the gas price on mainnet is
+// 1000000000 yoctoNEAR per gas unit.
+//
+//   30 Tgas  -> 0.03 NEAR
+//   150 Tgas -> 0.15 NEAR
+//   400 Tgas -> 0.40 NEAR
+//
+// the contract PREPAYS the gas from the key's allowance before the
+// call runs, so an allowance of 0 is refused with
+// `NotEnoughAllowance` before the contract is even reached. 1 NEAR
+// covers the largest gas this skill uses with room to spare.
+
+/** the methods the agent's limited key may call on the chess contract. */
+export const SHIT_1170_CHESS_KEY_METHODS = [
+  "play_move",
+  "resign",
+  "cancel",
+  "challenge",
+  "accept_challenge",
+  "reject_challenge",
+  "claim_points",
+  "set_is_agent",
+  "join_matchmaking",
+  "cancel_matchmaking",
+  "create_ai_game",
+] as const;
+
+/**
+ * the allowance the agent's limited key needs, in yoctoNEAR.
+ *
+ * 1 NEAR. it covers the prepaid gas of the largest call this skill
+ * makes — 400 Tgas, against a VeryHard ai — with room to spare.
+ */
+export const SHIT_1170_CHESS_KEY_ALLOWANCE = "1000000000000000000000000";
+
+/**
+ * the command the human runs to add the narrow key.
+ *
+ * the keys skill queues it and the human signs it in the web app.
+ */
+export function shit_1170_chess_key_command_fun(): string {
+  return (
+    `bun bin/key_queue_add.ts --receiver-id ${SHIT_1170_CHESS_CONTRACT_ID} ` +
+    `--methods ${SHIT_1170_CHESS_KEY_METHODS.join(",")} ` +
+    `--allowance ${SHIT_1170_CHESS_KEY_ALLOWANCE}`
+  );
+}
+
+/**
+ * the command the human runs to add the whole-contract key.
+ *
+ * the whole-contract scope also carries the money-shaped methods, so
+ * it is the bigger key of the two.
+ */
+export function shit_1170_chess_key_whole_contract_command_fun(): string {
+  return (
+    `bun bin/key_queue_add.ts --receiver-id ${SHIT_1170_CHESS_CONTRACT_ID} ` +
+    `--allowance ${SHIT_1170_CHESS_KEY_ALLOWANCE}`
+  );
+}
+
 // --- THE PAYLOADS ---
 
 /**

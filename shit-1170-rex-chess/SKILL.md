@@ -194,7 +194,7 @@ key that was already handed to somebody else has another holder.
 
 ```sh
 # the human runs this, and approves it in the web app
-bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 0
+bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 1000000000000000000000000
 ```
 
 no method names means every method on that contract. the narrower key
@@ -203,9 +203,21 @@ is one flag away, and it drops the money-shaped methods:
 ```sh
 bun bin/key_queue_add.ts \
   --receiver-id app.chess-game.near \
-  --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent \
-  --allowance 0
+  --methods play_move,resign,cancel,challenge,accept_challenge,reject_challenge,claim_points,set_is_agent,join_matchmaking,cancel_matchmaking,create_ai_game \
+  --allowance 1000000000000000000000000
 ```
+
+**the allowance is not the deposit — it is the prepaid gas.** the
+contract takes `gas_limit x gas_price` from the key's allowance before
+the call runs, and mainnet's gas price is 1000000000 yoctoNEAR per gas
+unit. a 30 Tgas call needs 0.03 NEAR of allowance, so a key with an
+allowance of 0 is refused with `NotEnoughAllowance` before the
+contract is reached. 1 NEAR covers every call this skill makes.
+
+**the method list is the whole skill.** a key that leaves out
+`join_matchmaking` or `create_ai_game` cannot queue for a match or
+open a game against the ai, and the contract refuses the call with
+`MethodNameMismatch`.
 
 `chess_key_add.ts` shows the key that is already there and the
 command to add one.
