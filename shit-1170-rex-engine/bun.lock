@@ -7,7 +7,7 @@
       "dependencies": {
         "@huggies/shit-1170-rex-engine-middleman": "^0.0.6",
         "@near-kit-tool-box/env": "0.3.0",
-        "@near-kit-tool-box/fun": "0.3.0",
+        "@near-kit-tool-box/fun": "0.3.1",
         "near-kit": "^0.20.2",
       },
       "devDependencies": {
@@ -53,7 +53,7 @@
 
     "@near-kit-tool-box/env": ["@near-kit-tool-box/env@0.3.0", "", { "dependencies": { "dotenv": "^18.0.9", "near-kit": "^0.20.2" }, "peerDependencies": { "typescript": "^7.0.2" } }, "sha512-5gg+IXKhcXbXHi2GGGaOv2NQf3LuLB9j5WBUyZ8SvQvPlQxyDyQHYXYUDVEWLJZUsH0s4GrI1YYGyCKlha20aQ=="],
 
-    "@near-kit-tool-box/fun": ["@near-kit-tool-box/fun@0.3.0", "", { "dependencies": { "@zorsh/zorsh": "0.5.2", "near-kit": "^0.20.2", "zod": "^4.6.7" }, "peerDependencies": { "typescript": "^7.0.2" } }, "sha512-1vc5D6NrQdWe7oh7qS3K8xN5WnUyoGAWA3BWvNd7OzdvCaAMnDArQz/E41+EJfFoktcJmAwdeDNiK3YIoc+hzA=="],
+    "@near-kit-tool-box/fun": ["@near-kit-tool-box/fun@0.3.1", "", { "dependencies": { "@zorsh/zorsh": "0.5.2", "near-kit": "^0.20.2", "zod": "^4.6.7" }, "peerDependencies": { "typescript": "^7.0.2" } }, "sha512-yJE7DcB67Wjlqv5Cu/s9WoDnfzZC1Itsx3bZaZ5oEOUd5m7Yk4h494qkwkRB5S+mRpwwEyyJpfa7HR6s9/B1fw=="],
 
     "@noble/ciphers": ["@noble/ciphers@2.2.0", "", {}, "sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA=="],
 
