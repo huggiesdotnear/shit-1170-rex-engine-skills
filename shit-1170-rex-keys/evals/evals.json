@@ -1,0 +1,78 @@
+{
+  "skill_name": "shit-1170-rex-keys",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I want to give my friend a key that can swap on ref.finance.near. Nothing else. Can you set that up?",
+      "expected_output": "Makes a NEW limited access key, queues an add_key for the account naming ref.finance.near as the receiver and the swap method, and explains that the human approves it in the web app.",
+      "assertions": [
+        "Makes a fresh key rather than reusing one that was generated before",
+        "Names ref.finance.near as the receiver id",
+        "Queues the addition instead of adding the key directly",
+        "Does not print or reveal the private key",
+        "Says the human approves it in the web app"
+      ],
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "What keys does my account sleet.near have right now? I want to see which ones are limited and which are full access.",
+      "expected_output": "Reads the access keys off the chain with key_chain.ts and lists each key with its public key, whether it is full access or limited, the receiver, the methods and the allowance.",
+      "assertions": [
+        "Reads the keys from the chain rather than guessing",
+        "Says which keys are full access and which are limited",
+        "Shows the receiver id and the method names for the limited keys",
+        "Does not confuse a full access key with a limited one"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Can you take back the key you gave me for ref.finance.near? Use the one you generated for me.",
+      "expected_output": "Queues a delete_key for the account using the key this agent offered that account most recently, and says the human approves the removal.",
+      "assertions": [
+        "Uses the key the agent itself offered, rather than asking the user for a public key",
+        "Queues the removal instead of removing the key directly",
+        "Says the human approves it in the web app",
+        "Does not print the private key"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Remove my main account key from sleet.near, the full access one.",
+      "expected_output": "Refuses. A full access key IS the account and removing it locks the holder out, so the engine refuses the removal and the skill says so in plain words.",
+      "assertions": [
+        "Refuses to queue the removal of a full access key",
+        "Explains that a full access key IS the account and removing it locks the holder out",
+        "Does not queue the removal anyway",
+        "Offers the limited keys as the removable ones"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Make me a NEAR key I can back up and restore later. I want the recovery phrase too.",
+      "expected_output": "Makes a key derived from a new BIP-39 seed phrase at NEAR's path m/44'/397'/0', keeps it, and prints the phrase because it was asked for.",
+      "assertions": [
+        "Uses the seed phrase path rather than a plain random key",
+        "Prints the seed phrase because it was explicitly asked for",
+        "States the derivation path m/44'/397'/0'",
+        "Keeps the key in the local store"
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Give my account a limited key on usdt.tether-token.near that can call ft_transfer, with an allowance of 1 USDT.",
+      "expected_output": "Converts 1 USDT to its unit amount for usdt.tether-token.near and queues the add_key with that allowance as a string.",
+      "assertions": [
+        "Gives the allowance in the chain's unit amount, not the decimal amount",
+        "Uses 6 decimals for usdt.tether-token.near",
+        "Names ft_transfer as the method",
+        "Sends the allowance as a string"
+      ],
+      "files": []
+    }
+  ]
+}

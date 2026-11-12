@@ -20,6 +20,7 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 ## the skills
 
 - [shit-1170-rex-engine](./shit-1170-rex-engine/SKILL.md) — propose, verify, queue, and track rex engine transactions and swaps
+- [shit-1170-rex-keys](./shit-1170-rex-keys/SKILL.md) — limited NEAR access keys: generate one, queue its addition to an account, queue its removal, and read the keys an account already has. every key offered is a fresh one, and the private key and the seed phrase are kept in the local store
 - [shit-1170-rex-tx-explorer](./shit-1170-rex-tx-explorer/SKILL.md) — read an account's transaction history and read transactions by hash, with every transaction kept in a local sqlite store so the same one is never looked up twice
 - [shit-1170-rex-ft](./shit-1170-rex-ft/SKILL.md) — NEP-141 token transfers, contact list, receiver checks, wrapping and unwrapping NEAR through wrap.near, plus the token reads — token info from the chain and the intear API, holders, and an account's balances
   - [WRAP.NEAR.md](./shit-1170-rex-ft/DOCS/WRAP.NEAR.md) — the wrap.near contract, the payloads, and the conditional storage registration
@@ -52,6 +53,9 @@ ${HOME}/.shit-1170-rex-engine/
 │   ├── index.json           # the list of every local record
 │   ├── tx/<queue_id>.json   # one local copy per queued batch
 │   └── swap/<swap_id>.json  # one local copy per queued swap
+├── keys/                    # the keys skill's store of limited access keys
+│   ├── keys.sqlite          # every key pair ever generated, and the seed phrases
+│   └── added/               # one json file per key that was offered to an account
 └── tx/                      # the tx explorer skill's sqlite store of transactions read
 ```
 
