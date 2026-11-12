@@ -29,6 +29,8 @@ mod irc_tests;
 #[cfg(test)]
 mod session_tests;
 #[cfg(test)]
+mod store_tests;
+#[cfg(test)]
 mod integration_tests;
 
 // =================================================

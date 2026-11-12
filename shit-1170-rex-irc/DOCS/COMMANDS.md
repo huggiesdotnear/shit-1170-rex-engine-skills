@@ -687,6 +687,10 @@ n entries, which is what a caller asking "what did i just see" wants.
 
 each entry has `at`, `target`, `from`, `text` and `msgid`.
 
+**the daemon writes the file, so this shows what the connection has seen** —
+not only what a client asked for. see [who writes the
+history](#who-writes-the-history).
+
 ### config forget
 
 ```sh
@@ -766,6 +770,28 @@ credentials file is the one with the password, and it is made mode `0600`.
 jq -r 'select(.target=="#shit-1170") | "\(.from): \(.text)"' \
   ~/.shit-1170-rex-engine/irc/history.jsonl
 ```
+
+### who writes the history
+
+**the daemon writes it.** every message it sees goes into the file as it
+arrives — so the history holds the whole conversation, not just the messages a
+caller happened to ask for.
+
+the write happens in one place: where the session records an event. that covers
+the messages that arrive normally and the ones the reconnect's gap-fill pulls
+back in, so nothing is missed and nothing is written twice.
+
+**the client commands do not write it.** `read`, `wait` and `reply` all go
+through the daemon, so what they show is already in the file.
+
+only what somebody said is kept — a `message`, a `notice` or a `dm`. a join, a
+quit and a topic change are not kept, because a log of the conversation does
+not need them.
+
+the timestamp is the server's own `server-time` tag when it sent one, because
+that is the time the message was sent. without it the local clock is used.
+
+**the file grows for as long as the daemon runs.** `config forget` empties it.
 
 ---
 

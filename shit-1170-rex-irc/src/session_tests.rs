@@ -27,6 +27,34 @@ mod tests {
         }
     }
 
+    /// point the store at a temp folder, so the tests do not write
+    /// into the real one.
+    ///
+    /// recording an event writes to the local history — that is what
+    /// the daemon does — so a test that records has to have a store of
+    /// its own, or it writes into `~/.shit-1170-rex-engine`.
+    ///
+    /// the folder is removed when the guard is dropped, so a test run
+    /// leaves nothing behind in the temp dir.
+    fn temp_home(name: &str) -> TempHome {
+        let dir = std::env::temp_dir().join(format!("shit-1170-rex-irc-session-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the temp dir");
+        // SAFETY: the store's test lock means no other thread is
+        // reading or writing the environment at this moment.
+        unsafe { std::env::set_var("SHIT_1170_REX_HOME", &dir) };
+        TempHome(dir)
+    }
+
+    /// a temp folder that removes itself when it goes out of scope.
+    struct TempHome(std::path::PathBuf);
+
+    impl Drop for TempHome {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     fn session() -> std::sync::Arc<Session> {
         let options = IrcOptions {
             nick: "sleet-agent".to_string(),
@@ -37,6 +65,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_message_is_recorded_once() {
+        let _guard = crate::store::test_lock().await;
+        let _home = temp_home("recorded-once");
         let session = session();
         session.record(event_from("someone", "hello")).await;
         let entries = session.since(0, 10).await;
@@ -46,6 +76,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_same_message_is_not_recorded_twice() {
+        let _guard = crate::store::test_lock().await;
+        let _home = temp_home("recorded-twice");
         // the reconnect's chathistory gap fill can hand back messages
         // the client already had. the msgid is what says so.
         let session = session();
@@ -57,6 +89,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_cursor_advances_over_the_events() {
+        let _guard = crate::store::test_lock().await;
+        let _home = temp_home("cursor");
         let session = session();
         session.record(event_from("someone", "one")).await;
         session.record(event_from("someone", "two")).await;
@@ -74,6 +108,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_head_is_the_last_sequence_number() {
+        let _guard = crate::store::test_lock().await;
+        let _home = temp_home("head");
         let session = session();
         assert_eq!(session.head().await, 0);
         session.record(event_from("someone", "one")).await;
@@ -140,7 +176,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_cursor_covers_everything_that_was_recorded() {        // the cursor is what a caller advances. it has to cover every
+    async fn the_cursor_covers_everything_that_was_recorded() {
+        let _guard = crate::store::test_lock().await;
+        let _home = temp_home("cursor-covers");
+        // the cursor is what a caller advances. it has to cover every
         // event, or a message is skipped for good.
         let session = session();
         for i in 0..50 {

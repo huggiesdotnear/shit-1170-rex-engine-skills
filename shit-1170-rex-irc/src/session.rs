@@ -356,6 +356,25 @@ impl Session {
             }
         }
 
+        // --- THE LOCAL HISTORY ---
+        // what was heard is written to the local store, so a caller
+        // that read a channel can look at it again without the
+        // connection having to carry it. the ircd keeps messages in
+        // memory only, and forgets everything when it restarts — so
+        // this copy is the only one that lasts.
+        //
+        // the write happens HERE, in the one place every event goes
+        // through, so the daemon, the gap fill after a reconnect and
+        // the client's own reads all end up in the same file. writing
+        // it in the http handler instead would only save the messages
+        // somebody happened to ask for.
+        //
+        // it is a synchronous file write, and it is kept out of the
+        // log lock above so it cannot hold up the next read.
+        if let Some(entry) = crate::store::history_entry_for(&event) {
+            crate::store::append_history(&[entry]);
+        }
+
         // a send with no receivers is not an error — it just means
         // nobody is streaming right now.
         let _ = self.tx.send(event);

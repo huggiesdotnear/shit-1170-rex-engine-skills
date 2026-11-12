@@ -24,6 +24,13 @@
 // to look at what it read again. the ircd keeps messages in memory
 // only, and it forgets everything when it restarts, so the client
 // keeps its own copy.
+//
+// --- WHO WRITES IT ---
+// the daemon writes it, from the one place every event goes through:
+// where the session records an event. so the file holds the whole
+// conversation the connection saw — not only the messages a caller
+// happened to ask for — and the gap-fill after a reconnect lands in
+// it too.
 // =================================================
 
 use serde::{Deserialize, Serialize};
@@ -47,6 +54,27 @@ pub fn home_dir() -> PathBuf {
     }
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.join(HOME_DIR_NAME)
+}
+
+// --- THE TEST LOCK ---
+//
+// the store's home is a process-wide env var, so only one test can
+// point it at its own folder at a time. cargo runs the tests in
+// parallel threads, so without this lock they would all write into
+// the same folder and each would read the others' files.
+//
+// it lives here, in the store, because the store is what the env var
+// selects — every test that touches the store goes through it.
+//
+// it is an ASYNC mutex, because the session tests hold it across an
+// await. a std mutex would block the runtime thread that holds it,
+// and tokio can move a task between threads — so the guard has to
+// be an async-aware one.
+#[cfg(test)]
+pub async fn test_lock() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let lock = LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
+    lock.lock().await
 }
 
 /// the irc folder inside the store.
@@ -219,6 +247,75 @@ pub struct HistoryEntry {
     /// the ircv3 msgid, when the server sent one.
     #[serde(default)]
     pub msgid: Option<String>,
+}
+
+/// the kinds of event that go into the history file.
+///
+/// only what somebody said is kept. a join, a quit or a topic change
+/// is noise in a log of the conversation.
+pub fn is_history_kind(kind: &str) -> bool {
+    matches!(kind, "message" | "notice" | "dm")
+}
+
+/// turn an irc event into a history entry, if it belongs in the log.
+///
+/// the timestamp comes from the server's `server-time` tag when it
+/// sent one, because that is the time the message was sent. without
+/// it the local clock is used, which is the time it was received.
+pub fn history_entry_for(event: &crate::irc::IrcEvent) -> Option<HistoryEntry> {
+    if !is_history_kind(&event.kind) {
+        return None;
+    }
+    let at = event.at.clone().unwrap_or_else(chrono_like_now);
+    Some(HistoryEntry {
+        at,
+        target: event.target.clone().unwrap_or_default(),
+        from: event.from.clone(),
+        text: event.text.clone(),
+        msgid: event.msgid.clone(),
+    })
+}
+
+/// the current time, as an ISO timestamp.
+///
+/// the format is the one the server's `server-time` tag uses, so a
+/// line written from a local clock reads the same as a line written
+/// from the server's clock.
+pub fn chrono_like_now() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let (year, month, day, hour, minute, second) = civil_from_unix(secs);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
+/// split a unix timestamp into its civil parts.
+///
+/// this is the days-from-civil algorithm in reverse: it counts the
+/// days since the epoch and turns them into a date, without pulling
+/// in a date library for it.
+pub fn civil_from_unix(secs: u64) -> (i64, u32, u32, u32, u32, u32) {
+    let days = (secs / 86_400) as i64;
+    let rem = secs % 86_400;
+    let hour = (rem / 3_600) as u32;
+    let minute = ((rem % 3_600) / 60) as u32;
+    let second = (rem % 60) as u32;
+
+    // the epoch is 1970-01-01. shift it to 0000-03-01, so the leap
+    // day lands at the end of the year and the months march evenly.
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let year = if m <= 2 { y + 1 } else { y };
+
+    (year, m, d, hour, minute, second)
 }
 
 /// append messages to the history file.
