@@ -107,6 +107,22 @@ export interface SHIT_1170_CHESS_DAEMON_OPTIONS {
   agent_decides: boolean;
   /** how long the daemon waits for the agent's answer. */
   agent_timeout_ms: number;
+  /**
+   * play ONE game at a time.
+   *
+   * the contract allows five active games per account, and nothing
+   * stops the daemon from having all five. that is rarely what
+   * anybody wants: five games means five games to follow, and the
+   * agent's attention is split across them.
+   *
+   * with this on, the daemon plays the game it has and ignores the
+   * others — it does not resign them, and it does not start new
+   * ones. the contract still counts them, so a game that is already
+   * open is still there when the daemon comes back to it.
+   *
+   * default true.
+   */
+  one_game_at_a_time: boolean;
 }
 
 /**
@@ -221,6 +237,17 @@ export class SHIT_1170_CHESS_DAEMON {
       }
 
       await this.play_game_fun(game_id);
+
+      // --- ONE GAME AT A TIME ---
+      //
+      // the contract allows five active games. playing all five means
+      // five games to follow, and the agent's attention split across
+      // them. so after the first game has been played, the others are
+      // left alone.
+      //
+      // they are NOT resigned. they are still open on the contract, and
+      // they are still there when the daemon comes back to them.
+      if (this.options.one_game_at_a_time) break;
     }
   }
 

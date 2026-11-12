@@ -263,6 +263,25 @@ the flags:
 
 ---
 
+#### ONE GAME AT A TIME
+
+**the daemon plays one game, and leaves the others alone.**
+
+the contract allows **five active games** per account, and nothing
+stops a daemon from having all five of them. that is rarely what
+anybody wants: five games means five games to follow, and the agent's
+attention is split across them. the daemon asks for a decision on
+every game it is playing, so five games means five requests every
+fifteen seconds.
+
+so the daemon plays the first game it has and stops there. the others
+are **not** resigned — they stay open on the contract, and they are
+still there when the daemon comes back to them.
+
+`--all-games` plays every open game instead.
+
+---
+
 #### THE LOCK
 
 **one daemon plays one account.** the daemon claims `daemon.lock` when

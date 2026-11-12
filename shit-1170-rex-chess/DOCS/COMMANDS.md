@@ -467,6 +467,7 @@ see [DAEMON.md](./DAEMON.md) for the whole of it.
 | `--no-accept` | do not accept challenges. |
 | `--agent-decides` | ask an agent to choose the moves. the daemon writes the decision to a file and waits. |
 | `--agent-timeout <ms>` | how long it waits for the agent's answer. default 120000. |
+| `--all-games` | play every open game. the default is ONE game at a time. |
 | `--state` | read the last written state instead of running. |
 
 ---

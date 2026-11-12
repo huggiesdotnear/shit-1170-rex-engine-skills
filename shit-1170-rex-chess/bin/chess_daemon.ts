@@ -38,6 +38,7 @@ await shit_1170_chess_main_fun(async () => {
       "no-accept",
       "state",
       "agent-decides",
+      "all-games",
     ],
   });
 
@@ -54,6 +55,7 @@ await shit_1170_chess_main_fun(async () => {
         "--agent-decides asks an agent to choose the moves. the daemon writes",
         "  the decision to a file and waits; the agent answers with the move.",
         "--agent-timeout is how long it waits, in ms. default 120000.",
+        "--all-games plays every open game. the default is ONE game at a time.",
       ],
     });
     return;
@@ -97,6 +99,7 @@ await shit_1170_chess_main_fun(async () => {
     agent_decides: args_bool_fun(args, "agent-decides"),
     agent_timeout_ms:
       args_number_fun(args, "agent-timeout", 120_000) ?? 120_000,
+    one_game_at_a_time: !args_bool_fun(args, "all-games"),
   });
 
   // the daemon writes its state to a file, so the details go to stderr
