@@ -36,6 +36,7 @@ import {
   shit_1170_chess_account_fun,
   shit_1170_chess_game_info_fun,
   shit_1170_chess_game_ids_fun,
+  shit_1170_chess_is_queued_fun,
 } from "./chain";
 import {
   shit_1170_chess_api_position_fen_fun,
@@ -101,6 +102,21 @@ const SHIT_1170_CHESS_BACKOFF_MIN_MS = 1_000;
 const SHIT_1170_CHESS_BACKOFF_MAX_MS = 30_000;
 
 /**
+ * how often the chain is polled for the agent's turn.
+ *
+ * the stream is the fast path, and the chain is the truth. the api's
+ * indexer can stop delivering game events for an account — the stream
+ * keeps sending heartbeats and nothing else — and a daemon that only
+ * listens to the stream then sits there with a game waiting on it.
+ *
+ * so the daemon also asks the chain directly: on every tick it reads
+ * the account's active games, and for each one whose turn it is, it
+ * plays. the poll is deliberately unhurried. it is a safety net under
+ * the stream, not a replacement for it.
+ */
+const SHIT_1170_CHESS_POLL_INTERVAL_MS = 15_000;
+
+/**
  * the daemon.
  */
 export class SHIT_1170_CHESS_DAEMON {
@@ -115,6 +131,7 @@ export class SHIT_1170_CHESS_DAEMON {
   private currentGame: SHIT_1170_CHESS_GAME_ID | null = null;
   private lastEvent: string | null = null;
   private lastError: string | null = null;
+  private pollTask: Promise<void> | null = null;
 
   constructor(options: SHIT_1170_CHESS_DAEMON_OPTIONS) {
     this.options = options;
@@ -143,6 +160,62 @@ export class SHIT_1170_CHESS_DAEMON {
   }
 
   /**
+   * ask the chain for the account's active games, and play each one
+   * that is waiting on the agent.
+   *
+   * this is the safety net under the stream. the api's indexer can
+   * stop delivering game events for an account, and when it does the
+   * stream carries heartbeats and nothing else — the game sits there
+   * waiting for a move that never comes. the chain knows who is to
+   * move, so the chain is asked.
+   */
+  private async poll_games_fun(): Promise<void> {
+    if (this.stopped) return;
+
+    let game_ids: SHIT_1170_CHESS_GAME_ID[];
+    try {
+      game_ids = await shit_1170_chess_game_ids_fun(this.options.account_id);
+    } catch (error) {
+      this.lastError =
+        error instanceof Error ? error.message : String(error);
+      shit_1170_chess_log_append_fun({
+        at: Date.now(),
+        event: "poll_failed",
+        detail: { error: this.lastError },
+      });
+      return;
+    }
+
+    for (const game_id of game_ids) {
+      if (this.stopped) return;
+
+      // the agent plays only its own games. the contract's list is the
+      // account's, but the guard costs nothing.
+      const white = game_id[1];
+      const black = game_id[2];
+      if (
+        white !== this.options.account_id &&
+        black !== this.options.account_id
+      ) {
+        continue;
+      }
+
+      await this.play_game_fun(game_id);
+    }
+  }
+
+  /**
+   * the poll loop. it runs for the life of the daemon.
+   */
+  private async poll_loop_fun(): Promise<void> {
+    while (!this.stopped) {
+      await sleep_fun(SHIT_1170_CHESS_POLL_INTERVAL_MS);
+      if (this.stopped) return;
+      await this.poll_games_fun();
+    }
+  }
+
+  /**
    * run the daemon until it is stopped.
    */
   async run_fun(): Promise<void> {
@@ -151,6 +224,10 @@ export class SHIT_1170_CHESS_DAEMON {
     if (this.options.matchmake) {
       await this.join_matchmaking_fun();
     }
+
+    // the poll loop runs beside the stream, not inside it, so a slow
+    // chain read never stalls the event handling.
+    this.pollTask = this.poll_loop_fun();
 
     let backoff = SHIT_1170_CHESS_BACKOFF_MIN_MS;
 
@@ -207,6 +284,9 @@ export class SHIT_1170_CHESS_DAEMON {
    */
   stop_fun(): void {
     this.stopped = true;
+    // the poll loop sleeps between ticks, so it is not stopped by the
+    // flag alone — it finishes its sleep and sees the flag.
+    void this.pollTask;
   }
 
   /**
@@ -219,6 +299,21 @@ export class SHIT_1170_CHESS_DAEMON {
    */
   private async join_matchmaking_fun(): Promise<void> {
     try {
+      // the queue entry is not always needed — one may already be open
+      // from an earlier run, and the contract refuses a second one.
+      // asking first turns a panic into a quiet skip.
+      const already_queued = await quiet_fun(() =>
+        shit_1170_chess_is_queued_fun(this.options.account_id),
+      );
+      if (already_queued) {
+        shit_1170_chess_log_append_fun({
+          at: Date.now(),
+          event: "already_queued",
+          detail: { account_id: this.options.account_id },
+        });
+        return;
+      }
+
       const account = await quiet_fun(() =>
         shit_1170_chess_account_fun(this.options.account_id),
       );

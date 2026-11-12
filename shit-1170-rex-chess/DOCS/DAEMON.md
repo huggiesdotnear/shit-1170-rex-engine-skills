@@ -84,6 +84,25 @@ connection**, not two.
 
 ---
 
+#### THE POLL
+
+**the daemon also asks the chain, every fifteen seconds.**
+
+the stream is the fast path, and the chain is the truth. the api's
+indexer can stop delivering game events for an account — the stream
+keeps sending heartbeats and nothing else — and a daemon that only
+listens to the stream then sits there with a game waiting on it.
+
+so on every tick the daemon reads the account's active games off the
+chain, and for each one whose turn it is, it plays. the poll is a
+**safety net under the stream**, not a replacement for it: when the
+stream works, the poll finds nothing to do and costs one view call.
+
+the poll does not change what a game is, or who is to move — it reads
+the same board the stream would have told it about.
+
+---
+
 #### THE HEARTBEAT
 
 **the api sends a heartbeat every five seconds.** one is missing for
@@ -178,6 +197,7 @@ bun bin/chess_games.ts
 ```text
 ${HOME}/.shit-1170-rex-engine/chess/
 ├── daemon.json      # what the daemon is doing right now
+├── daemon.lock      # the claim that says one daemon plays this account
 ├── log.jsonl        # one line per event
 └── games.sqlite     # the games it plays, and how they went
 ```
@@ -190,9 +210,15 @@ runs and a json file would be rewritten whole on every line.
 {"at":1762965482200,"event":"joined_matchmaking","detail":{"min_elo":832.6,"max_elo":1232.6,"elo":1032.6}}
 ```
 
-the events are `joined_matchmaking`, `matchmaking_failed`,
-`accepted_challenge`, `challenge_skipped_wagered`, `played_move`,
-`play_failed`, `stream_error` and `no_legal_move`.
+the events are `joined_matchmaking`, `already_queued`,
+`matchmaking_failed`, `accepted_challenge`,
+`challenge_skipped_wagered`, `played_move`, `play_failed`,
+`poll_failed`, `stream_error` and `no_legal_move`.
+
+`already_queued` means the account already had a queue entry open —
+from an earlier run, or a previous daemon that was not stopped — so
+the daemon left it alone instead of asking for a second one. the
+contract refuses a second entry.
 
 the folder is `0700` and the files are `0600`. the state is not a
 secret the way the keys store is, but it says which account the agent
@@ -230,6 +256,23 @@ the flags:
 | `--no-matchmaking` | do not join the queue on start. |
 | `--no-accept` | do not accept challenges. |
 | `--state` | read the last written state instead of running. |
+
+---
+
+#### THE LOCK
+
+**one daemon plays one account.** the daemon claims `daemon.lock` when
+it starts, and a second daemon on the same account refuses to start
+and says which pid holds it.
+
+the reason is the race. two daemons on one account each read the
+board, each pick a move, and each send it. the contract checks the
+move against the board as it is at the moment the move lands, so one
+of the two moves is stale, and the contract refuses it with "Illegal
+move" — a failed transaction that still costs gas.
+
+a lock left behind by a daemon that died is taken over rather than
+blocking the account forever, so a crash does not need a human.
 
 ---
 

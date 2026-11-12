@@ -21,6 +21,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
@@ -29,6 +30,7 @@ import {
   shit_1170_chess_daemon_state_path_fun,
   shit_1170_chess_dir_fun,
   shit_1170_chess_games_db_path_fun,
+  shit_1170_chess_lock_path_fun,
   shit_1170_chess_log_path_fun,
 } from "./paths";
 import type {
@@ -110,6 +112,116 @@ export function shit_1170_chess_log_append_fun(entry: {
     chmodSync(path, 0o600);
   } catch {
     // as above.
+  }
+}
+
+// --- THE LOCK ---
+
+/**
+ * claim the daemon's lock for one account.
+ *
+ * one daemon plays one account. a second daemon on the same account
+ * reads the same board, picks its own move, and sends it — and one of
+ * the two moves is always stale by the time it lands, because the
+ * contract checks the move against the board as it is at that moment.
+ * the loser of that race pays gas for an "Illegal move".
+ *
+ * so the daemon claims a lock file, and a second one is told plainly
+ * that the account is already being played.
+ *
+ * the claim is `wx` — create it, and fail if it is already there. the
+ * file holds the pid, and the pid is checked before the claim: a lock
+ * left behind by a daemon that died is taken over rather than blocking
+ * the account forever.
+ *
+ * returns the lock, or throws with the pid that holds it.
+ */
+export function shit_1170_chess_lock_claim_fun(
+  account_id: string,
+): { path: string; release: () => void } {
+  shit_1170_chess_store_make_fun();
+  const path = shit_1170_chess_lock_path_fun();
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      writeFileSync(
+        path,
+        `${JSON.stringify({ account_id, pid: process.pid, at: Date.now() })}\n`,
+        { encoding: "utf8", mode: 0o600, flag: "wx" },
+      );
+      return {
+        path,
+        release: () => {
+          try {
+            unlinkSync(path);
+          } catch {
+            // the lock is gone already, or the file is not ours to
+            // remove. either way there is nothing to do.
+          }
+        },
+      };
+    } catch {
+      // the file exists. is the daemon that wrote it still alive?
+      const holder = shit_1170_chess_lock_holder_fun(path);
+      if (holder && is_alive_fun(holder.pid)) {
+        throw new Error(
+          `the account ${account_id} is already being played by a daemon ` +
+            `with pid ${holder.pid}. one daemon plays one account — stop the ` +
+            `other one first. the lock file is ${path}.`,
+        );
+      }
+
+      // the holder is gone. take the lock over.
+      try {
+        unlinkSync(path);
+      } catch {
+        // as above.
+      }
+    }
+  }
+
+  throw new Error(
+    `could not claim the daemon lock at ${path}. another daemon may have ` +
+      `taken it in the meantime.`,
+  );
+}
+
+/**
+ * read the lock file, if there is one.
+ */
+export function shit_1170_chess_lock_holder_fun(
+  path: string,
+): { account_id: string; pid: number; at: number } | null {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+      account_id?: string;
+      pid?: number;
+      at?: number;
+    };
+    if (typeof parsed.pid !== "number") return null;
+    return {
+      account_id: parsed.account_id ?? "",
+      pid: parsed.pid,
+      at: parsed.at ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * is a process still running?
+ *
+ * signal 0 does not touch the process — it only asks whether it is
+ * there to be signalled.
+ */
+function is_alive_fun(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    // the process is gone, or it belongs to somebody else.
+    return false;
   }
 }
 

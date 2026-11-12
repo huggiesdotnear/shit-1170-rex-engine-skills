@@ -67,3 +67,19 @@ export function shit_1170_chess_log_path_fun(): string {
 export function shit_1170_chess_games_db_path_fun(): string {
   return join(shit_1170_chess_dir_fun(), "games.sqlite");
 }
+
+/**
+ * the file the daemon claims while it runs.
+ *
+ * one daemon plays one account. a second daemon on the same account
+ * reads the same board, picks its own move, and sends it — and one of
+ * the two moves is always stale by the time it lands, because the
+ * contract checks the move against the board as it is at that moment.
+ * the loser of that race pays gas for an "Illegal move".
+ *
+ * so the daemon claims a file, and a second one is told plainly that
+ * the account is already being played.
+ */
+export function shit_1170_chess_lock_path_fun(): string {
+  return join(shit_1170_chess_dir_fun(), "daemon.lock");
+}

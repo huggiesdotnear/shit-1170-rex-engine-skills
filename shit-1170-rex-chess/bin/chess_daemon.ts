@@ -28,7 +28,7 @@ import {
 } from "../src/cli";
 import { SHIT_1170_CHESS_DAEMON } from "../src/daemon";
 import { shit_1170_chess_signer_find_fun } from "../src/signer";
-import { shit_1170_chess_state_read_fun } from "../src/store";
+import { shit_1170_chess_state_read_fun, shit_1170_chess_lock_claim_fun } from "../src/store";
 
 await shit_1170_chess_main_fun(async () => {
   const args = parse_args_fun(process.argv.slice(2), {
@@ -74,6 +74,12 @@ await shit_1170_chess_main_fun(async () => {
   // said plainly rather than after the daemon has started doing things.
   const signer = shit_1170_chess_signer_find_fun(account_id);
 
+  // the lock is taken before the daemon starts playing. one daemon
+  // plays one account: two of them would each read the board, each
+  // pick a move, and one of those moves would be stale by the time it
+  // landed — the contract would refuse it, and it would cost gas.
+  const lock = shit_1170_chess_lock_claim_fun(account_id);
+
   const daemon = new SHIT_1170_CHESS_DAEMON({
     account_id,
     band,
@@ -102,6 +108,14 @@ await shit_1170_chess_main_fun(async () => {
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
+  // the lock goes when the daemon goes, however it goes. a signal
+  // ends the process without the `exit` handler running, so the
+  // signal handlers release it too.
+  const release = () => lock.release();
+  process.on("exit", release);
+  process.on("SIGINT", release);
+  process.on("SIGTERM", release);
 
   await daemon.run_fun();
+  release();
 });
