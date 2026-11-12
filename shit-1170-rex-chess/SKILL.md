@@ -63,6 +63,7 @@ the `kind` column says where the answer comes from:
 | `chess_play_move.ts` | key | the agent signs a play_move |
 | `chess_match.ts` | key | join the matchmaking queue, or leave it |
 | `chess_challenge.ts` | key | challenge, accept, or reject |
+| `chess_games.ts` | local | the games the agent has played |
 | `chess_daemon.ts` | key | the long-lived autonomous player |
 
 **every flag, every answer shape and the local store are in
