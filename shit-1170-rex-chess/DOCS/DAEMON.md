@@ -220,6 +220,10 @@ from an earlier run, or a previous daemon that was not stopped — so
 the daemon left it alone instead of asking for a second one. the
 contract refuses a second entry.
 
+when the daemon is asking an agent, three more events appear:
+`asked_agent`, `agent_played_move` and `agent_no_answer`. and
+`agent_move_illegal` when the answer named a move that is not legal.
+
 the folder is `0700` and the files are `0600`. the state is not a
 secret the way the keys store is, but it says which account the agent
 is playing as.
@@ -273,6 +277,51 @@ move" — a failed transaction that still costs gas.
 
 a lock left behind by a daemon that died is taken over rather than
 blocking the account forever, so a crash does not need a human.
+
+---
+
+#### THE AGENT DECIDES
+
+**the daemon can be told to propose, and let an agent choose.**
+
+```sh
+bun bin/chess_daemon.ts --account kcameau.near --agent-decides --agent-timeout 300000
+```
+
+the split is deliberate:
+
+- choosing a **legal** move is mechanical. `chess.js` already knows
+  about check, pins, stalemate and the rest.
+- choosing a **good** move is judgement. which move to play against an
+  opponent that is shuffling its king is not a search question.
+
+so in this mode the daemon does not choose. it writes the position
+and the legal moves to a file, and waits:
+
+```text
+${HOME}/.shit-1170-rex-engine/chess/decisions/
+├── [206540279,"kcameau.near","crans.near"].request.json
+└── [206540279,"kcameau.near","crans.near"].answer.json
+```
+
+an agent reads the request, decides, and writes the answer:
+
+```sh
+bun bin/chess_agent_decide.ts --list
+bun bin/chess_agent_decide.ts --id '[206540279,"kcameau.near","crans.near"]' --mv f7f6
+```
+
+**the answer is checked against the legal list before it is signed.**
+an answer that names a move the contract would reject is refused, and
+the daemon plays its own move instead. that is the point of the
+split: a wrong answer costs nothing, because it never reaches the
+chain.
+
+**if nobody answers in time, the daemon plays its own move.** a game
+that waits for an agent that is not there is a game that never ends.
+
+`chess_agent_play.ts` is a working agent: it reads the requests,
+searches with alpha-beta under a time budget, and answers them.
 
 ---
 

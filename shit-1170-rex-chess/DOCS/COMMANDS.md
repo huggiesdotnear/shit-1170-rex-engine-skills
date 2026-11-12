@@ -465,7 +465,141 @@ see [DAEMON.md](./DAEMON.md) for the whole of it.
 | `--band <n>` | the spread of the elo band it queues at. default 200. |
 | `--no-matchmaking` | do not join the queue on start. |
 | `--no-accept` | do not accept challenges. |
+| `--agent-decides` | ask an agent to choose the moves. the daemon writes the decision to a file and waits. |
+| `--agent-timeout <ms>` | how long it waits for the agent's answer. default 120000. |
 | `--state` | read the last written state instead of running. |
+
+---
+
+#### CHESS_DECIDE.TS
+
+the decision package: the position and every legal move, for an agent
+to choose from.
+
+```sh
+bun bin/chess_decide.ts --game-id '[206540279,"kcameau.near","crans.near"]' --account kcameau.near
+```
+
+```json
+{
+  "ok": true,
+  "game_id": [206540279, "kcameau.near", "crans.near"],
+  "position": {
+    "fen": "r1bqkbnr/1p2npp1/p3p2p/2pp4/5P2/PPNBPN2/1BPP2PP/R2QK2R b - - 0 9",
+    "board": ["R  QK  R", " BPP  PP", "PPNBPN  ", "     P  ", "  pp    ", "p   p  p", " p  npp ", "r bqkbnr"],
+    "turn": "Black",
+    "white": "kcameau.near",
+    "black": "crans.near",
+    "account_id": "kcameau.near",
+    "material": 60
+  },
+  "game": {
+    "has_bets": false,
+    "opponent_is_ai": false,
+    "moves_played": 8
+  },
+  "recommended": { "mv": "f7f6", "san": "f6", "from": "f7", "to": "f6" },
+  "candidates": [
+    { "mv": "f7f6", "san": "f6", "from": "f7", "to": "f6", "score": -12, "rank": 1 }
+  ],
+  "candidate_count": 19
+}
+```
+
+**the scores are the program's opinion**, from the side to move's point
+of view. they are there so an agent can see what the program thought
+before it overrides it.
+
+| flag | what it does |
+| --- | --- |
+| `--game-id <json array>` | the game. required, or use the loose flags. |
+| `--account <account_id>` | the account the agent plays as. required. |
+| `--full` | list every candidate. without it only the top ten are listed. |
+
+---
+
+#### CHESS_DECIDE_MOVE.TS
+
+make the move an agent chose. the move is **checked against the legal
+list before it is signed**, so an illegal choice costs nothing.
+
+```sh
+bun bin/chess_decide_move.ts --game-id '[206540279,"kcameau.near","crans.near"]' --account kcameau.near --mv f7f6
+```
+
+```json
+{
+  "ok": true,
+  "game_id": [206540279, "kcameau.near", "crans.near"],
+  "mv": "f7f6",
+  "san": "f6",
+  "gas_tgas": 150,
+  "tx_hash": "...",
+  "public_key": "ed25519:...",
+  "receiver_id": "app.chess-game.near"
+}
+```
+
+a move that is not legal is refused, with the legal moves listed, and
+**nothing is signed**:
+
+```json
+{
+  "ok": false,
+  "error": "\"f7f7\" is not a legal move in this position. it was not sent, and nothing was signed.",
+  "legal_moves": ["f7f6", "f7f5", "f7f8", "..."]
+}
+```
+
+| flag | what it does |
+| --- | --- |
+| `--game-id <json array>` | the game. required, or use the loose flags. |
+| `--account <account_id>` | the account the key signs for. required. |
+| `--mv <move>` | the move. the contract's notation, san, or the two squares. |
+| `--dry-run` | check the move and build the payload without signing. |
+
+---
+
+#### CHESS_AGENT_DECIDE.TS
+
+the decisions waiting for an agent, and the answer to one.
+
+```sh
+bun bin/chess_agent_decide.ts --list
+bun bin/chess_agent_decide.ts --id '[206540279,"kcameau.near","crans.near"]' --mv f7f6
+```
+
+the id is the request's id, which is the game's json array.
+
+| flag | what it does |
+| --- | --- |
+| `--list` | the decisions waiting for an answer. |
+| `--id <game_id>` | which decision to answer. required. |
+| `--mv <move>` | the move to play. checked against the legal moves first. |
+| `--note <text>` | why this move. the daemon logs it. |
+
+---
+
+#### CHESS_AGENT_PLAY.TS
+
+the agent itself. it reads the requests the daemon writes, works out
+the move, and writes the answer back.
+
+```sh
+bun bin/chess_agent_play.ts --play
+```
+
+it uses an alpha-beta search with a time budget, so it goes as deep as
+it can in the time it has and always returns a move.
+
+| flag | what it does |
+| --- | --- |
+| `--play` | watch for decisions and answer them. without it, one pass. |
+
+| env | what it does |
+| --- | --- |
+| `CHESS_AGENT_DEPTH` | the deepest the search goes. default 6. |
+| `CHESS_AGENT_BUDGET_MS` | how long the search may take. default 8000. |
 
 ---
 

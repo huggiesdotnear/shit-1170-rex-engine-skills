@@ -125,8 +125,9 @@ everything else is the two squares joined.
 an illegal move is a failed transaction that still costs gas. the
 model is not a chess engine.
 
-the chooser is a shallow search: every legal move is tried, the
-position is evaluated, and the best is taken.
+the chooser is a search: every legal move is tried, the position is
+evaluated, and the best is taken. it looks **two moves ahead**, so it
+sees the opponent's reply.
 
 **the evaluation is from white's point of view, and it is flipped for
 black.** without that flip the chooser plays black as if it were
@@ -137,13 +138,99 @@ version had the bug, and a test caught it.
 the piece values are the usual ones — pawn 100, knight 320, bishop
 330, rook 500, queen 900 — plus a little for a pawn in the centre.
 
-the search is shallow on purpose. a deeper search would be better
-chess, and it would cost far more time per move, and the point of
-this skill is a playing agent rather than a strong one.
+#### THE ENDGAME KNOWLEDGE
+
+**material alone cannot see an endgame.** with a rook and a knight
+against a bare king, every legal move keeps the material exactly the
+same, so every move scores the same and the chooser takes the first
+one it finds. in practice that means the king walks in a circle while
+the win sits on the board unclaimed.
+
+so the evaluation also knows about:
+
+- **where the rook is.** a rook on the seventh rank cuts the enemy
+  king off from the pawns. a rook that has the enemy king cut off —
+  the rook between it and the middle of the board — is worth more.
+- **the rook pushing the king to the edge.** the rook wants to be on
+  the edge file with the enemy king between it and the centre, so the
+  king has nowhere to go but the corner.
+- **where the king is.** in an endgame the king is a fighting piece,
+  and two kings close to each other is the shape of a won position.
+
+these terms are scaled so that the biggest of them is worth less than
+a pawn: they break ties between moves that keep the material equal,
+and they never outvote a real material difference.
+
+#### WHY THE SEARCH LOOKS TWO MOVES AHEAD
+
+one ply is not enough to tell a quiet move from a useful one. a rook
+that gives check drives the enemy king away from the squares it
+wanted, and a one-ply evaluation cannot see that — the position after
+the check is worth the same as the position after a quiet move,
+because the material is identical.
+
+so the search looks one move further, and the opponent's best reply is
+taken into account. the opponent's reply is a **correction**, not the
+answer: it is blended with the static value, because minimising over
+the replies would punish the move that drives the enemy king away.
+the escape was forced, and it is temporary.
+
+**the search sees checkmate.** a move that mates scores higher than
+anything else, and a move that stalemates scores lower. neither shows
+up in a material evaluation.
+
+#### THE POSITIONS ALREADY SEEN
+
+**the contract has no repetition rule.** a position seen three times
+does not end the game — it just goes on, forever. an agent that walks
+into a loop plays forever and never wins.
+
+so the caller may pass the positions the game has already been
+through, and a move that returns to one of them is worth less. it is
+a penalty, not a ban: sometimes a move that repeats is the only move
+there is.
 
 **the same position always gives the same move.** a tie is broken
 towards the move that comes first, so the choice is stable between
 runs.
+
+---
+
+#### THE AGENT DECIDES
+
+the chooser above is what the daemon uses when it plays on its own.
+there is a second way to play, and the two are the same pieces of work
+divided differently:
+
+- choosing a **legal** move is mechanical. `chess.js` already knows
+  about check, pins, stalemate and the rest.
+- choosing a **good** move is judgement. which move to play against an
+  opponent that is shuffling its king is not a search question.
+
+so the daemon can be told to **propose and let an agent decide**. it
+writes the position and the legal moves to a file, waits for an
+answer, checks the answer against the legal list, and signs it. an
+answer that names a move the contract would reject is refused before
+anything is signed, so it costs nothing.
+
+```sh
+# the daemon, asking an agent
+bun bin/chess_daemon.ts --account <account_id> --agent-decides --agent-timeout 300000
+
+# what the daemon is waiting for
+bun bin/chess_agent_decide.ts --list
+
+# the answer
+bun bin/chess_agent_decide.ts --id '<game_id>' --mv <move>
+
+# the package, for an agent that wants to decide by itself
+bun bin/chess_decide.ts --game-id '<json array>' --account <account_id>
+
+# and making that choice
+bun bin/chess_decide_move.ts --game-id '<json array>' --account <account_id> --mv <move>
+```
+
+the moves themselves are in [DAEMON.md](./DAEMON.md).
 
 ---
 

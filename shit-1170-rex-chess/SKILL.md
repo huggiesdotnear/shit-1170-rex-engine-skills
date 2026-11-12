@@ -65,6 +65,10 @@ the `kind` column says where the answer comes from:
 | `chess_challenge.ts` | key | challenge, accept, or reject |
 | `chess_games.ts` | local | the games the agent has played |
 | `chess_daemon.ts` | key | the long-lived autonomous player |
+| `chess_decide.ts` | local | the position and the candidates, for an agent to decide from |
+| `chess_decide_move.ts` | key | make the move an agent chose, after checking it is legal |
+| `chess_agent_decide.ts` | local | the decisions waiting for an agent, and the answer to one |
+| `chess_agent_play.ts` | local | the agent itself: it reads the requests and answers them |
 
 **every flag, every answer shape and the local store are in
 [COMMANDS.md](./DOCS/COMMANDS.md).**
