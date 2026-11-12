@@ -34,6 +34,7 @@ it and one place to change it.
 - `@sleet-js/middleman-intear-dex-api` — `https://dex-backend.intear.tech`
 - `@sleet-js/middleman-rhea-api` — `https://api.rhea.finance`
 - `@sleet-js/middleman-near-social-api` — `https://api2.near.social`
+- `@sleet-js/middleman-protocol-pawns-api` — `https://api.protocol-pawns.com`
 - `@near-kit-tool-box/fun` — typed, Zod-validated NEAR contract helpers
 - `@near-kit-tool-box/env` — the server-side NEAR KIT client setup
 
@@ -99,6 +100,50 @@ the endpoints this library uses:
 | `GET /holders` | one token's holders, cursor-paged |
 
 ---
+
+#### PROTOCOL PAWNS API
+
+the index in front of `app.chess-game.near`, the on-chain chess
+contract.
+
+- base url: `https://api.protocol-pawns.com`
+- the typed client: `@sleet-js/middleman-protocol-pawns-api`
+- the contract skill:
+  <https://github.com/sleetplayground/near-kit-tool-box-skills/tree/main/sleet-kit-app-chess-game-near>
+
+the api is read-only and has no auth. it cannot place a move, a
+challenge, a bet or a wager — those are NEAR transactions against the
+contract, and the chess skill queues or signs them.
+
+the endpoints the chess skill uses:
+
+| endpoint | what it answers |
+| --- | --- |
+| `GET /game/{game_id}` | one game — the players, the board, the fen, the status |
+| `GET /game/{game_id}/moves` | the move history, with the **fen** of every position |
+| `GET /challenges` | the global open challenges |
+| `GET /leaderboard/elo` | the elo leaderboard, sorted |
+| `POST /account/query` | search the accounts by name prefix |
+| `GET /account/{account_id}` | the finished games of one account |
+| `GET /account/{account_id}/active-game` | the active game of one account |
+| `GET /account/{account_id}/stats` | the win/loss/draw stats of one account |
+| `GET /games` | the games, paginated and filterable |
+| `GET /bets` | the global bets |
+| `GET /events?account={account_id}` | the server-sent event stream |
+
+**the game id is the json-stringified tuple**, percent-encoded into
+the path:
+
+```sh
+curl -s "https://api.protocol-pawns.com/game/%5B206540279%2C%22kcameau.near%22%2C%22crans.near%22%5D"
+```
+
+**the api's `/info` endpoint is broken** — it answers `COALESCE types
+text and integer cannot be matched`. nothing depends on it.
+
+**the api's `/leaderboard/elo` is SORTED and the contract's
+`get_elo_ratings` is NOT.** the contract answers in storage order, so
+the first page is not the top page.
 
 #### NEAR RPC
 

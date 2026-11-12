@@ -42,6 +42,11 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
   - [DAEMON.md](./shit-1170-rex-irc/DOCS/DAEMON.md) — the ping, the reconnect, the gap-fill, and why the daemon is a daemon
   - [PROTOCOL.md](./shit-1170-rex-irc/DOCS/PROTOCOL.md) — the websocket transport, the capability negotiation, and the gotchas that bite
   - [SERVER.md](./shit-1170-rex-irc/DOCS/SERVER.md) — ergo, what it allows, what it will not keep, and the capabilities
+- [shit-1170-rex-chess](./shit-1170-rex-chess/SKILL.md) — play on-chain chess on app.chess-game.near: reading the board and the elo, choosing a move, queueing it for a human to sign, and — in autonomous mode — a long-lived daemon that plays on its own with a limited access key
+  - [MOVES.md](./shit-1170-rex-chess/DOCS/MOVES.md) — the board, the fen, coordinate notation, and the move chooser
+  - [MODES.md](./shit-1170-rex-chess/DOCS/MODES.md) — propose against autonomous, and the exception autonomous makes to the rule that the agent never signs
+  - [COMMANDS.md](./shit-1170-rex-chess/DOCS/COMMANDS.md) — every bin, every flag, and every answer shape
+  - [DAEMON.md](./shit-1170-rex-chess/DOCS/DAEMON.md) — the event stream, the heartbeat, the reconnect, and the matchmaking band
 
 ## the local store
 
@@ -56,7 +61,11 @@ ${HOME}/.shit-1170-rex-engine/
 ├── keys/                    # the keys skill's store of limited access keys
 │   ├── keys.sqlite          # every key pair ever generated, and the seed phrases
 │   └── added/               # one json file per key that was offered to an account
-└── tx/                      # the tx explorer skill's sqlite store of transactions read
+├── tx/                      # the tx explorer skill's sqlite store of transactions read
+└── chess/                   # the chess skill's daemon state and game history
+    ├── daemon.json          # what the daemon is doing right now
+    ├── log.jsonl            # one line per event
+    └── games.sqlite         # the games it plays, and how they went
 ```
 
 set `SHIT_1170_REX_HOME` to use a different directory.
