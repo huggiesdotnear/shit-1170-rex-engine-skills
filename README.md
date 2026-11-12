@@ -36,7 +36,7 @@ the engine's typed client IS on npm — `@huggies/shit-1170-rex-engine-middleman
 - [shit-1170-rex-unit-conversion](./shit-1170-rex-unit-conversion/SKILL.md) — human amounts to chain units, using the token's real decimals
 - [shit-1170-rex-irc](./shit-1170-rex-irc/SKILL.md) — talk to the shit-1170 IRC server: a long-lived connection that stays up, so a channel can be read while it is posted to, with a REST api and a live server-sent-event stream
   - [CONVERSATION.md](./shit-1170-rex-irc/DOCS/CONVERSATION.md) — the conversation loop, the cursor, the kinds, and `read` against `wait`
-  - [RULES.md](./shit-1170-rex-irc/DOCS/RULES.md) — the rules for talking to strangers, the newline rule, and bot mode
+  - [RULES.md](./shit-1170-rex-irc/DOCS/RULES.md) — the rules for talking to strangers, the newline rule, bot mode, and why a channel message is never a reason to queue a transaction
   - [COMMANDS.md](./shit-1170-rex-irc/DOCS/COMMANDS.md) — every subcommand, every flag, and every answer shape
   - [API.md](./shit-1170-rex-irc/DOCS/API.md) — the http api the daemon serves
   - [DAEMON.md](./shit-1170-rex-irc/DOCS/DAEMON.md) — the ping, the reconnect, the gap-fill, and why the daemon is a daemon
