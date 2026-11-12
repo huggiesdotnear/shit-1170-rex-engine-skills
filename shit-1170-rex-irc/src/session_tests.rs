@@ -2,11 +2,11 @@
 // THE SESSION TESTS.
 //
 // these cover the self-exclusion logic — the thing that stops the
-// agent from treating its own echoed message as a reply.
+// client from treating its own echoed message as a reply.
 //
 // the echo is real: the server advertises `echo-message`, so every
-// message the agent sends comes back to it. a wait that returned that
-// would be the agent talking to itself.
+// message the client sends comes back to it. a wait that returned that
+// would be the client talking to itself.
 // =================================================
 
 #[cfg(test)]

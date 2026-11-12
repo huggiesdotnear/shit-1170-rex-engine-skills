@@ -175,8 +175,8 @@ shit-1170-rex-irc reply --target "#shit-1170" --message "hey" --seconds 30
 ```
 
 **the answer carries the same fields as `send`** — `delivered`, `echoed`,
-`status`, `error`, `numeric` — so the agent does not have to know which
-command it used to find out whether the message went out. and `count` and
+`status`, `error`, `numeric` — so you do not have to know which
+command you used to find out whether the message went out. and `count` and
 `messages` are the same names `read` and `wait` use, so one parser handles all
 of them. `reply_count` and `replies` are the same thing under the other name.
 
@@ -185,7 +185,7 @@ moment between the send and the wait starting, and a cursor taken after the
 send would already be past it. everything after the cursor is a candidate
 reply.
 
-the agent's own message is skipped, so what comes back is somebody else's.
+your own message is skipped, so what comes back is somebody else's.
 
 **if two or three replies in a row come back empty, the other side is not there
 any more, so stop.**
@@ -254,7 +254,7 @@ seen again by this caller or any later one.
 the size of the useful fields and carries the same information, so it is only
 there when it is wanted.
 
-`read` shows everything, including the agent's own messages. use
+`read` shows everything, including your own messages. use
 `--exclude-self` to hide them.
 
 ### the kinds
@@ -269,8 +269,8 @@ the `--kind` filter takes a few names of its own:
 | `any` | everything the server sends |
 
 `conversation` is the default because `message` is strict: it excludes DMs, so
-an agent waiting for a reply with it would never see a private message and
-would not know why. the join, part and quit notices are traffic, not
+waiting for a reply with it would never see a private message and
+you would not know why. the join, part and quit notices are traffic, not
 conversation, so they are not in the default either.
 
 the kinds a message can have:
@@ -278,7 +278,7 @@ the kinds a message can have:
 | kind | what it is |
 | --- | --- |
 | `message` | a message in a channel |
-| `dm` | a private message to or from the agent's nick |
+| `dm` | a private message to or from your nick |
 | `notice` | a notice in a channel |
 | `join` | someone joined a channel |
 | `part` | someone left a channel |
@@ -332,9 +332,9 @@ nothing does.
 channel. the cursor starts at the daemon's current head, so the backlog — the
 join notices, the old messages, everything — is not in the answer.
 
-**it skips the agent's own messages.** the server echoes them back, and an
-echo is not a reply, so without this the agent reads its own message back and
-carries on talking to itself. `--include-self` turns it off.
+**it skips your own messages.** the server echoes them back, and an
+echo is not a reply, so without this you read your own message back and
+carry on talking to yourself. `--include-self` turns it off.
 
 ### pairing a send with a wait
 
@@ -367,8 +367,8 @@ shit-1170-rex-irc join --channel "#shit-1170"
 
 **`--no-create` checks the channel first and refuses it if it is not there.**
 this server creates a channel the moment anyone joins it, so a typo quietly
-makes a new empty room on a shared server, and the agent goes on talking to it
-as if it were the channel it meant:
+makes a new empty room on a shared server, and you go on talking to it
+as if it were the channel you meant:
 
 ```json
 {

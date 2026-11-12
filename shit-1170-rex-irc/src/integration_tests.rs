@@ -1,7 +1,7 @@
 // =================================================
 // THE INTEGRATION TESTS.
 //
-// these drive the daemon over its own http api, the way an agent
+// these drive the daemon over its own http api, the way a client
 // does. they are ignored by default because they need the real
 // server:
 //

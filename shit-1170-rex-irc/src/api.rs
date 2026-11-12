@@ -1,8 +1,8 @@
 // =================================================
 // THE HTTP API.
 //
-// the agent talks to this over http. the irc connection stays up in
-// the background, so the agent can send a message, read the channel,
+// the client talks to this over http. the irc connection stays up in
+// the background, so it can send a message, read the channel,
 // send another, and read again — all over one connection.
 //
 // the routes:
@@ -139,7 +139,7 @@ struct JoinRequest {
     ///
     /// this server creates a channel the moment anyone joins it, so a
     /// typo in a channel name quietly makes a new empty room — and
-    /// the agent goes on talking to it as if it were the channel it
+    /// the client goes on talking to it as if it were the channel it
     /// meant.
     #[serde(default)]
     no_create: bool,
@@ -417,7 +417,7 @@ async fn send(
     // the server answers a message it cannot deliver with an error
     // numeric. `401 ERR_NOSUCHNICK` is the one that matters most: a
     // DM to a nick that is not online is dropped SILENTLY, and the
-    // agent would never know.
+    // the client would never know.
     //
     // so the numeric is reported. `delivered` says plainly whether
     // the message went out.
@@ -435,7 +435,7 @@ async fn send(
     // the server refuses a message it cannot deliver, and says so with
     // an error numeric. `401 ERR_NOSUCHNICK` is the one that matters
     // most: a DM to a nick that is not online is dropped SILENTLY,
-    // and the agent would never know.
+    // and the client would never know.
     //
     // so a message is DELIVERED unless the server said no.
     //
@@ -471,7 +471,7 @@ async fn send(
 
     // --- THE `ok` FLAG ---
     // `ok` used to mean "the api call worked", which is true even
-    // when the server threw the message away. an agent checking `ok`
+    // when the server threw the message away. a caller checking `ok`
     // would believe a DM to a nick that was not online had been sent.
     //
     // so `ok` means "the server did not refuse this".
@@ -596,7 +596,7 @@ struct MessagesQuery {
     /// drop the events that came from our own nick.
     ///
     /// the server advertises `echo-message`, so every message the
-    /// agent sends comes back to it. a caller waiting for a REPLY
+    /// the client sends comes back to it. a caller waiting for a REPLY
     /// does not want its own message — that is not a reply.
     #[serde(default)]
     exclude_self: Option<bool>,
@@ -627,7 +627,7 @@ async fn messages(
     //
     // and it was SILENT: the answer said `count: 0` and carried the
     // log head as its cursor, so a caller that advanced past it never
-    // saw the message again. an agent waiting for a reply in a busy
+    // saw the message again. a caller waiting for a reply in a busy
     // channel would wait out its timeout and conclude nobody replied.
     //
     // so the whole log is scanned, and `limit` applies to the RESULT.
@@ -763,7 +763,7 @@ fn matches_query(
 /// only. `any` is everything.
 ///
 /// the strictness matters: `--kind message` used to be the only
-/// sensible filter, and it excluded DMs, so an agent waiting for a
+/// sensible filter, and it excluded DMs, so a caller waiting for a
 /// reply would never see a private one and would not know why.
 fn kind_matches(wanted: &str, actual: &str) -> bool {
     match wanted {
@@ -889,7 +889,7 @@ async fn channels(State(session): State_) -> impl IntoResponse {
         "channels": connection.channels,
         // the raw names list, as `nick!ident@host`.
         "names": names(&connection),
-        // the same list, split into the parts an agent wants.
+        // the same list, split into the parts a caller wants.
         "people": crate::irc::name_entries(&connection),
     }))
 }

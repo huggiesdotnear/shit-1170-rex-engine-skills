@@ -10,8 +10,8 @@
 //   api.rs     the http api: rest plus a server-sent-event stream
 //   store.rs   the local store: the config, the credentials, the history
 //
-// the agent talks to the http api. the irc connection stays up in the
-// background, so the agent can read a channel while it posts to it.
+// the client talks to the http api. the irc connection stays up in the
+// background, so it can read a channel while it posts to it.
 //
 // the one thing that makes a long-lived connection possible: the ircd
 // pings the client after 90 seconds of silence and drops it 60 seconds

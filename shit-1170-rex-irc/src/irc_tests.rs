@@ -142,7 +142,7 @@ mod tests {
     fn a_message_to_a_nick_is_a_dm() {
         // a channel starts with the channel type character. anything
         // else is a nick, and a message to a nick is a direct
-        // message — which an agent has to be able to tell apart from
+        // message — which the caller has to be able to tell apart from
         // a channel message, because a DM is private.
         let message = parse_line("@msgid=abc :notyourmom!~u@host PRIVMSG sleet-agent :psst");
         let event = to_event(&message).expect("a privmsg is an event");

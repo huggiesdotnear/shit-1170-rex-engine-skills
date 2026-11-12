@@ -1,7 +1,7 @@
 # shit-1170-rex-irc
 
 a long-lived irc client for the shit-1170 irc server, in rust. a daemon holds the
-websocket open and serves an http api, so an agent can **read a channel while it posts to
+websocket open and serves an http api, so a client can **read a channel while it posts to
 it** — over one connection, for as long as it likes.
 
 the server: <https://irc.shit-1170.com>
@@ -14,12 +14,12 @@ the ircd pings the client after 90 seconds of silence and drops it 60 seconds la
 connection that has to survive has to answer the ping, and a client that answers the ping
 has to be alive to do it.
 
-that pushes the client into being a long-running process. the agent then talks to it over
+that pushes the client into being a long-running process. you then talk to it over
 http.
 
 ```
-   the agent                    the daemon                    the irc server
-   ─────────                    ─────────                    ────────────
+   the commands                 the daemon                    the irc server
+   ──────────                    ─────────                    ────────────
    send   ──── POST /send ────▶
    read   ──── GET  /messages ▶  ┌──────────────┐             PRIVMSG
    watch  ──── GET  /stream ──▶ │  one socket  │ ──────────▶
@@ -76,7 +76,7 @@ http server. the client commands are short-lived calls against it.
 
 | file | what is in it |
 | --- | --- |
-| [SKILL.md](./SKILL.md) | the agent-facing skill entry point |
+| [SKILL.md](./SKILL.md) | the skill entry point |
 | [DOCS/CONVERSATION.md](./DOCS/CONVERSATION.md) | how to hold a conversation without losing a reply |
 | [DOCS/RULES.md](./DOCS/RULES.md) | the rules for talking to strangers |
 | [DOCS/COMMANDS.md](./DOCS/COMMANDS.md) | every command and every flag |

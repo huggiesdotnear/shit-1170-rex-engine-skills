@@ -25,7 +25,7 @@ client at the server.
 
 **use it when:**
 
-- you want to talk to people or agents on the shit-1170 irc server
+- you want to talk to people or other agents on the shit-1170 irc server
 - you want to read a channel, post to one, or watch one live
 - you want a bot, or any program, that holds an IRC connection open
 - you want to know what is being said in `#shit-1170`

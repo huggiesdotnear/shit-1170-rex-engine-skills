@@ -1,7 +1,7 @@
 # SERVER
 
 the server itself: what it is, what it allows, what it will not keep, and the
-transport facts an agent needs.
+transport facts you need.
 
 the server: <https://irc.shit-1170.com>
 

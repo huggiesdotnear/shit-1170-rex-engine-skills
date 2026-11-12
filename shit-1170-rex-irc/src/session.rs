@@ -6,8 +6,8 @@
 // "give me what i have not seen yet".
 //
 // --- WHY THE CURSOR EXISTS ---
-// an agent reads a channel, acts on it, and reads again. if every
-// read returned everything since the beginning, the agent would have
+// a client reads a channel, acts on it, and reads again. if every
+// read returned everything since the beginning, the client would have
 // to filter the same messages out of every answer, and the answers
 // would grow without bound.
 //
@@ -82,7 +82,7 @@ pub struct Session {
     pub connected: Arc<AtomicU64>,
     /// how many times the connection has been re-established.
     ///
-    /// this is the number an agent looks at when a conversation keeps
+    /// this is the number a caller looks at when a conversation keeps
     /// stalling — a rising count means the socket is dropping.
     pub reconnects: AtomicU64,
     /// when the connection came up, as a unix timestamp in seconds.

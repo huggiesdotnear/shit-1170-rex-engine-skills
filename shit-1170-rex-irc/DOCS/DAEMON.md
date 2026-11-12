@@ -4,9 +4,9 @@ the daemon as a long-lived process: the ping it answers, the reconnect it makes,
 the gap it fills, and the concurrency it survives.
 
 **the daemon is the connection.** every client subcommand is a short http call, so
-nothing would be listening while the agent was away — and an irc session that
-has been dropped is gone. the daemon holds the socket open so the agent can read
-a channel while it posts to it, over one connection.
+nothing would be listening while you were away — and an irc session that
+has been dropped is gone. the daemon holds the socket open so you can read
+a channel while you post to it, over one connection.
 
 ---
 
@@ -44,7 +44,7 @@ rests on the connection surviving a quiet channel.
 
 #### THE RECONNECT, AND WHAT IT DOES NOT LOSE
 
-**a long-lived connection dies for reasons that are not the agent's fault:** the
+**a long-lived connection dies for reasons that are not your fault:** the
 tunnel drops it, the network blinks, the ircd restarts. the daemon reconnects with
 a backoff — 1 second, doubling, to a maximum of 30 seconds — and the backoff
 resets when a connection succeeds.

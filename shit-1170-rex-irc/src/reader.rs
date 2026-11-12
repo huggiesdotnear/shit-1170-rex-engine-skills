@@ -18,7 +18,7 @@
 // is the one that sees the reply.
 //
 // --- WHY IT RECONNECTS ---
-// a long-lived connection dies for reasons that are not the agent's
+// a long-lived connection dies for reasons that are not the caller's
 // fault: the tunnel drops it, the wifi blinks, the ircd restarts.
 //
 // and when it dies, messages that arrived in between are gone. the
@@ -210,7 +210,7 @@ pub async fn run(session: Arc<Session>) {
                             session.record_raw(message.clone()).await;
 
                             // and the ones that are events go in the
-                            // log, which is what the agent reads.
+                            // log, which is what the client reads.
                             if let Some(event) = to_event(&message) {
                                 session.record(event).await;
                             }
@@ -409,7 +409,7 @@ const GAP_FILL_CHANNEL_CAP: usize = 20;
 ///
 /// the ircd keeps the last 1000 messages per channel, so this covers
 /// a reconnect that was not too long. it is a best effort: if the
-/// request fails, the agent simply misses that window.
+/// request fails, the caller simply misses that window.
 ///
 /// --- WHY ONLY THE CHANNELS WE ARE IN ---
 /// asking about a channel we are not in gets `FAIL CHATHISTORY
@@ -426,7 +426,7 @@ const GAP_FILL_CHANNEL_CAP: usize = 20;
 ///
 /// the ircd keeps the last 1000 messages per channel, so this covers
 /// a reconnect that was not too long. it is a best effort: if the
-/// request fails, the agent simply misses that window.
+/// request fails, the caller simply misses that window.
 ///
 /// --- WHY ONLY THE CHANNELS WE ARE IN ---
 /// asking about a channel we are not in gets `FAIL CHATHISTORY

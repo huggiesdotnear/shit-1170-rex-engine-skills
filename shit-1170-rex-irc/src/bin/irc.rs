@@ -16,7 +16,7 @@
 // --- WHY A DAEMON AND NOT A BUNCH OF ONE-SHOT BINS ---
 // the ircd pings the client after 90 seconds of silence and drops it
 // 60 seconds later. a one-shot bin that connects, does one thing, and
-// disconnects is fine, but an agent that wants to READ a channel while
+// disconnects is fine, but a client that wants to READ a channel while
 // it POSTS to it needs one connection that stays up.
 //
 // so the daemon is the connection, and the client subcommands are
@@ -133,7 +133,7 @@ enum Command {
     /// posts, then blocks until something comes back, and answers
     /// with both the send result and what was heard.
     ///
-    /// the agent's own message is skipped, so the reply it gets is
+    /// the client's own message is skipped, so the reply it gets is
     /// really somebody else's.
     Reply {
         /// the channel or nick.
@@ -198,7 +198,7 @@ enum Command {
         /// do not create the channel if it does not exist.
         ///
         /// this server creates a channel the moment anyone joins it,
-        /// so a typo quietly makes a new empty room — and the agent
+        /// so a typo quietly makes a new empty room — and the client
         /// goes on talking to it as if it were the channel it meant.
         #[arg(long)]
         no_create: bool,
@@ -238,14 +238,14 @@ enum Command {
     },
     /// wait for a message to arrive.
     ///
-    /// this blocks until something comes in, so the agent does not
+    /// this blocks until something comes in, so the client does not
     /// have to poll. it is the difference between a sleep-and-read
     /// loop and one call.
     ///
     /// --- WHY THE AGENT'S OWN MESSAGES ARE SKIPPED ---
     /// the server advertises `echo-message`, so every message the
-    /// agent sends comes straight back to it. waiting for a reply
-    /// would return the agent's own message and call it a reply —
+    /// the client sends comes straight back to it. waiting for a reply
+    /// would return the client's own message and call it a reply —
     /// which is how a conversation turns into talking to itself.
     ///
     /// so by default `wait` skips the messages from our own nick.
@@ -253,7 +253,7 @@ enum Command {
     ///
     /// --- WHY THE DEFAULT KIND IS "conversation" ---
     /// `--kind message` is strict: it means a message in a channel,
-    /// and it excludes a DM. so an agent waiting for a reply with
+    /// and it excludes a DM. so a caller waiting for a reply with
     /// `--kind message` would never see a private message, and would
     /// not know why.
     ///
@@ -286,7 +286,7 @@ enum Command {
         /// --- WHY THE CURSOR MATTERS WHEN YOU PAIR WITH A SEND ---
         /// a reply can arrive in the moment between the send going
         /// out and the wait starting. a wait with no cursor starts
-        /// AFTER that reply, so it never sees it — and the agent
+        /// AFTER that reply, so it never sees it — and the caller
         /// waits 30 seconds for an answer that already arrived.
         ///
         /// so a send that is followed by a wait must pass the
@@ -556,7 +556,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             // --- WHY THIS IS ONE CALL AND NOT TWO ---
             // the conversation loop is "post, then wait for the
-            // answer". making the agent do that as two calls means
+            // answer". making the caller do that as two calls means
             // it has to track the cursor between them, and that is
             // where the self-echo bug came from.
             //
@@ -592,7 +592,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(before_send)
                 .min(before_send);
 
-            // 2. wait for the answer. the agent's own message is
+            // 2. wait for the answer. the client's own message is
             //    skipped, so the reply it gets is really somebody
             //    else's.
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
@@ -635,7 +635,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "target": target,
                     "message": message,
                     // --- THE SAME FIELDS AS send ---
-                    // an agent should not have to know which command
+                    // a caller should not have to know which command
                     // it used to find out whether the message went
                     // out.
                     "delivered": sent.get("delivered").cloned().unwrap_or(json!(false)),
@@ -645,7 +645,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "numeric": sent.get("numeric").cloned().unwrap_or(json!(null)),
                     "cursor": cursor,
                     // --- THE SAME SHAPE AS read AND wait ---
-                    // an agent writing one "give me the messages"
+                    // a caller writing one "give me the messages"
                     // parser should not break on the reply command.
                     // so `count` and `messages` are the names here
                     // too, with the older names kept as aliases.
@@ -669,16 +669,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // --- WHY THIS POLLS INSTEAD OF STREAMING ---
             // the daemon has a live stream at /stream, but a stream
             // does not end: it holds the connection open forever. the
-            // agent wants "the next message", which has a natural end.
+            // the caller wants "the next message", which has a natural end.
             //
             // so this polls the daemon's cursor endpoint and returns
             // as soon as something matches. the wait happens HERE,
-            // not in the agent, so the agent makes one call instead of
+            // not in the client, so the caller makes one call instead of
             // a sleep-and-read loop.
             // --- WHY THE CURSOR DEFAULTS TO "FROM NOW" ---
             // a wait with no cursor would start at 0 and read the
             // whole backlog — the join notices, the old test
-            // messages, everything. the agent asked to wait for the
+            // messages, everything. the caller asked to wait for the
             // NEXT message, not to re-read the channel.
             //
             // so with no cursor the wait starts at the daemon's
@@ -706,9 +706,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(from) = &from {
                     query.push_str(&format!("&from={}", urlencode(from)));
                 }
-                // the agent's own messages are not replies. the server
+                // the client's own messages are not replies. the server
                 // echoes them back, so they have to be filtered out or
-                // the agent ends up talking to itself.
+                // the client ends up talking to itself.
                 if !include_self {
                     query.push_str("&exclude_self=true");
                 }

@@ -102,7 +102,7 @@ pub struct IrcMessage {
     pub seq: u64,
 }
 
-/// a message the agent cares about, flattened for json output.
+/// a message the caller cares about, flattened for json output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrcEvent {
     /// `message`, `join`, `part`, `quit`, `nick`, `topic`, `notice`, ...
@@ -254,7 +254,7 @@ pub fn to_event(message: &IrcMessage) -> Option<IrcEvent> {
     // on this server (see the CHANTYPES isupport token). anything
     // else — a nick — is a direct message.
     //
-    // this matters because an agent has to be able to tell the two
+    // this matters because the caller has to be able to tell the two
     // apart. a DM is private and deserves a different answer than a
     // message in a channel that everyone can read.
     let is_dm = matches!(kind, "message" | "notice")
@@ -1038,7 +1038,7 @@ impl IrcConnection {
     /// client then believes it is in a channel it is not in, and every
     /// message to it is refused with `403 No such channel`.
     ///
-    /// that is a permanent wedge: the agent reconnects, believes it is
+    /// that is a permanent wedge: the client reconnects, believes it is
     /// fine, and sends into a channel where nobody is listening.
     pub fn forget_channels(&mut self) {
         self.channels.clear();
@@ -1096,7 +1096,7 @@ pub struct NameEntry {
 /// the names in a channel, split into their parts.
 ///
 /// the `353` names reply gives `nick!ident@host`, and sometimes a
-/// prefix before it. an agent wants the nick on its own, so the parts
+/// prefix before it. a caller wants the nick on its own, so the parts
 /// are pulled apart here.
 pub fn name_entries(connection: &IrcConnection) -> HashMap<String, Vec<NameEntry>> {
     let mut out: HashMap<String, Vec<NameEntry>> = HashMap::new();

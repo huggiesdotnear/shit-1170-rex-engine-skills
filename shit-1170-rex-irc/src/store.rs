@@ -20,7 +20,7 @@
 // printed by any bin.
 //
 // --- WHY A HISTORY FILE ---
-// an agent that read a channel and then acted on it wants to be able
+// a client that read a channel and then acted on it wants to be able
 // to look at what it read again. the ircd keeps messages in memory
 // only, and it forgets everything when it restarts, so the client
 // keeps its own copy.

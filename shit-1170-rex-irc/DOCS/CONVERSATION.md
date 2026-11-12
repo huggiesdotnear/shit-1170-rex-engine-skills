@@ -18,7 +18,7 @@ shit-1170-rex-irc reply --target "#shit-1170" --message "hey" --seconds 30
 
 **repeat it until the conversation is done, then stop.** if two or three replies in a row
 come back empty, the other side is not there any more, so stop asking. a loop that keeps
-asking is the agent talking to itself.
+asking is you talking to yourself.
 
 ---
 
@@ -61,8 +61,8 @@ asking is the agent talking to itself.
 | `replies` | an alias of `messages` |
 
 **the send fields and the read fields are both in there.** `delivered`, `echoed`, `status`,
-`error` and `numeric` are the same names `send` uses, so the agent does not have to know
-which command it ran to find out whether the message went out. `count` and `messages` are
+`error` and `numeric` are the same names `send` uses, so you do not have to know
+which command you ran to find out whether the message went out. `count` and `messages` are
 the same names `read` and `wait` use, so one parser handles all three.
 
 ---
@@ -84,7 +84,7 @@ tracking the cursor between them, and that is where the gap opens.
 
 #### A PRIVATE EXCHANGE
 
-**a DM is private: it was meant for the agent and nobody else.** so it deserves a
+**a DM is private: it was meant for you and nobody else.** so it deserves a
 different answer than a message in a channel everyone can read.
 
 ```sh
@@ -109,7 +109,7 @@ shit-1170-rex-irc read --since 0 --limit 50 --kind conversation --target "#shit-
 | `--kind` | none | only events of this kind |
 | `--target` | none | only events for this channel |
 | `--from` | none | only events from this nick |
-| `--exclude-self` | off | drop the events from the agent's own nick |
+| `--exclude-self` | off | drop the events from your own nick |
 | `--compact` | off | leave out the raw irc line |
 | `--api-port` | `8787` | the port the daemon listens on |
 
@@ -130,11 +130,11 @@ shit-1170-rex-irc wait --seconds 30 --kind conversation --from notyourmom
 | `--target` | none | only messages for this channel |
 | `--kind` | `conversation` | only messages of this kind |
 | `--since` | the daemon's head | the cursor to start from |
-| `--include-self` | off | include the agent's own messages |
+| `--include-self` | off | include your own messages |
 | `--api-port` | `8787` | the port the daemon listens on |
 
 **`wait` blocks until something arrives and times out with `count: 0`.** it does not hang
-forever, and the wait happens inside the command, so the agent makes one call instead of a
+forever, and the wait happens inside the command, so you make one call instead of a
 sleep-and-read loop.
 
 ```json
@@ -150,8 +150,8 @@ sleep-and-read loop.
 ```
 
 **with no `--since`, it waits for what arrives NEXT.** it starts at the daemon's current
-head, so it does not re-read the backlog — no old join notices, no old test messages. the
-agent asked to wait for the next message, not to re-read the channel. pass `--since` when
+head, so it does not re-read the backlog — no old join notices, no old test messages. you
+asked to wait for the next message, not to re-read the channel. pass `--since` when
 the point is to catch up on what came before.
 
 ---
@@ -159,7 +159,7 @@ the point is to catch up on what came before.
 #### THE CURSOR: `cursor` AND `head`
 
 **every event gets a sequence number, and a read takes `since` and returns what is
-newer.** the answer carries the cursor to pass next time, so the agent never sees the
+newer.** the answer carries the cursor to pass next time, so you never see the
 same message twice.
 
 a read answers with TWO cursors, and they are not the same thing:
@@ -176,8 +176,8 @@ later one.
 
 **so the consequence of using the wrong one is a lost message.** in a busy channel with a
 `--from` filter, most of the traffic is turned away. advancing to the head steps over all
-of it, and the answer the agent was waiting for arrives later than the point the cursor
-jumped to. the wait then times out with `count: 0` and the agent concludes nobody replied.
+of it, and the answer you were waiting for arrives later than the point the cursor
+jumped to. the wait then times out with `count: 0` and you conclude nobody replied.
 
 the cursor moves past everything that was seen, whether or not it matched. that is the
 only way a filtered-out event can be examined once and never come back.
@@ -186,15 +186,15 @@ only way a filtered-out event can be examined once and never come back.
 
 #### OWN MESSAGES: AN ECHO IS NOT A REPLY
 
-**`read` shows everything, including the agent's own messages.** use
+**`read` shows everything, including your own messages.** use
 `read --exclude-self` to hide them.
 
-**`wait` skips the agent's own messages by default**, and `--include-self` turns that
-off. the server advertises `echo-message`, so every message the agent sends comes
-straight back to it. waiting without the filter would return the agent's own message and
+**`wait` skips your own messages by default**, and `--include-self` turns that
+off. the server advertises `echo-message`, so every message you send comes
+straight back to you. waiting without the filter would return your own message and
 call it a reply — which is how a conversation turns into talking to itself.
 
-`reply` skips the agent's own message for the same reason, so what comes back is really
+`reply` skips your own message for the same reason, so what comes back is really
 somebody else's.
 
 ---
@@ -202,7 +202,7 @@ somebody else's.
 #### PAIRING A SEND WITH A WAIT
 
 **a reply can arrive in the moment between the send going out and the wait starting.** a
-wait with no cursor starts after that reply, so it never sees it — the agent waits 30
+wait with no cursor starts after that reply, so it never sees it — you wait 30
 seconds for an answer that already arrived.
 
 so a send that is followed by a wait has to pass the cursor, and `send` reports the one it
@@ -233,7 +233,7 @@ every event carries a kind:
 | kind | what it is |
 | --- | --- |
 | `message` | a message in a channel |
-| `dm` | a private message to or from the agent's nick |
+| `dm` | a private message to or from your nick |
 | `notice` | a notice in a channel |
 | `join` | someone joined a channel |
 | `part` | someone left a channel |
@@ -251,10 +251,10 @@ and `--kind` takes a few names of its own:
 | `dm` | a private message only |
 | `any` | everything the server sends |
 
-**`conversation` is the default because `message` is strict.** it excludes DMs, so an
-agent waiting for an answer with `--kind message` would never see a private message and
-would not know why. the join, part and quit notices are traffic, not conversation, so they
-are not in the default either.
+**`conversation` is the default because `message` is strict.** it excludes DMs, so
+waiting for an answer with `--kind message` would never see a private message and
+you would not know why. the join, part and quit notices are traffic, not conversation,
+so they are not in the default either.
 
 **a `quit` has no target.** the reason is in the text:
 
@@ -282,7 +282,7 @@ line.** it is the same filters `read` takes.
 | `--kind` | only events of this kind |
 | `--target` | only events for this channel |
 | `--from` | only events from this nick |
-| `--exclude-self` | drop the events from the agent's own nick |
+| `--exclude-self` | drop the events from your own nick |
 | `--api-port` | the port the daemon listens on |
 
 ```json
