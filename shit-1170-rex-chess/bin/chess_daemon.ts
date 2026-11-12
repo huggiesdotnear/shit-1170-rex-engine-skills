@@ -32,7 +32,13 @@ import { shit_1170_chess_state_read_fun, shit_1170_chess_lock_claim_fun } from "
 
 await shit_1170_chess_main_fun(async () => {
   const args = parse_args_fun(process.argv.slice(2), {
-    boolean_flags: ["help", "no-matchmaking", "no-accept", "state"],
+    boolean_flags: [
+      "help",
+      "no-matchmaking",
+      "no-accept",
+      "state",
+      "agent-decides",
+    ],
   });
 
   if (args.positional[0] === "help" || args_bool_fun(args, "help")) {
@@ -45,6 +51,9 @@ await shit_1170_chess_main_fun(async () => {
         "runs the daemon in the foreground. it does not return.",
         "--state reads the last written state instead of running.",
         "--band is the spread of the elo band it queues at. default 200.",
+        "--agent-decides asks an agent to choose the moves. the daemon writes",
+        "  the decision to a file and waits; the agent answers with the move.",
+        "--agent-timeout is how long it waits, in ms. default 120000.",
       ],
     });
     return;
@@ -85,6 +94,9 @@ await shit_1170_chess_main_fun(async () => {
     band,
     matchmake: !args_bool_fun(args, "no-matchmaking"),
     accept: !args_bool_fun(args, "no-accept"),
+    agent_decides: args_bool_fun(args, "agent-decides"),
+    agent_timeout_ms:
+      args_number_fun(args, "agent-timeout", 120_000) ?? 120_000,
   });
 
   // the daemon writes its state to a file, so the details go to stderr

@@ -83,3 +83,29 @@ export function shit_1170_chess_games_db_path_fun(): string {
 export function shit_1170_chess_lock_path_fun(): string {
   return join(shit_1170_chess_dir_fun(), "daemon.lock");
 }
+
+/**
+ * the folder the daemon and an agent hand decisions over through.
+ *
+ * the daemon writes what it wants decided into it, and an agent
+ * writes what it decided back. it is a folder of files rather than a
+ * socket, because the two sides are separate processes that may not
+ * even be on the same machine.
+ */
+export function shit_1170_chess_decisions_dir_fun(): string {
+  return join(shit_1170_chess_dir_fun(), "decisions");
+}
+
+/**
+ * the file a decision request is written to.
+ */
+export function shit_1170_chess_request_path_fun(id: string): string {
+  return join(shit_1170_chess_decisions_dir_fun(), `${id}.request.json`);
+}
+
+/**
+ * the file an answer is written to.
+ */
+export function shit_1170_chess_answer_path_fun(id: string): string {
+  return join(shit_1170_chess_decisions_dir_fun(), `${id}.answer.json`);
+}

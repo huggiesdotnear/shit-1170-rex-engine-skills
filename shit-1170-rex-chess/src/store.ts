@@ -28,10 +28,13 @@ import { dirname } from "node:path";
 
 import {
   shit_1170_chess_daemon_state_path_fun,
+  shit_1170_chess_decisions_dir_fun,
   shit_1170_chess_dir_fun,
   shit_1170_chess_games_db_path_fun,
   shit_1170_chess_lock_path_fun,
   shit_1170_chess_log_path_fun,
+  shit_1170_chess_answer_path_fun,
+  shit_1170_chess_request_path_fun,
 } from "./paths";
 import type {
   SHIT_1170_CHESS_DAEMON_STATE,
@@ -225,6 +228,70 @@ function is_alive_fun(pid: number): boolean {
   }
 }
 
+// --- THE DECISION HANDOFF ---
+
+/**
+ * write a decision request for an agent to answer.
+ *
+ * the daemon decides NOTHING in agent mode. it writes down what it
+ * wants decided — the position and the legal moves — and waits.
+ *
+ * the file is written atomically, so an agent that reads it never
+ * sees half a request.
+ */
+export function shit_1170_chess_request_write_fun(
+  id: string,
+  request: Record<string, unknown>,
+): void {
+  const dir = shit_1170_chess_decisions_dir_fun();
+  mkdirSync(dir, { recursive: true });
+  try {
+    chmodSync(dir, 0o700);
+  } catch {
+    // as above.
+  }
+
+  const path = shit_1170_chess_request_path_fun(id);
+  const temp = `${path}.tmp`;
+  writeFileSync(temp, `${JSON.stringify(request, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  renameSync(temp, path);
+}
+
+/**
+ * read the answer an agent wrote, if there is one.
+ */
+export function shit_1170_chess_answer_read_fun(
+  id: string,
+): { mv?: string; note?: string } | null {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(shit_1170_chess_answer_path_fun(id), "utf8"),
+    ) as { mv?: string; note?: string };
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * clear a request and its answer, once the decision has been made.
+ */
+export function shit_1170_chess_decision_clear_fun(id: string): void {
+  for (const path of [
+    shit_1170_chess_request_path_fun(id),
+    shit_1170_chess_answer_path_fun(id),
+  ]) {
+    try {
+      unlinkSync(path);
+    } catch {
+      // already gone.
+    }
+  }
+}
+
 // --- THE GAME HISTORY ---
 
 /**
@@ -251,6 +318,27 @@ export function shit_1170_chess_games_db_open_fun(): Database {
     );
   `);
 
+  // --- THE POSITIONS ---
+  //
+  // the positions each game has been through.
+  //
+  // the api's move history is the other source of them, but the api
+  // is an index and it can be behind — then it has no history at all.
+  // the contract has NO repetition rule, so a position that comes
+  // round three times does not end the game; it just goes on, forever.
+  //
+  // so the daemon keeps its own record. it is the belt to the api's
+  // braces: the api's history when it is there, this one when it is
+  // not.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS positions (
+      game_id    TEXT NOT NULL,
+      fen        TEXT NOT NULL,
+      seen_at    INTEGER NOT NULL,
+      PRIMARY KEY (game_id, fen)
+    );
+  `);
+
   try {
     chmodSync(path, 0o600);
   } catch {
@@ -274,6 +362,42 @@ export function shit_1170_chess_games_put_fun(
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(game_id) DO NOTHING;`,
   ).run(JSON.stringify(game_id), height, white, black, opened_at);
+}
+
+/**
+ * remember a position a game has been through.
+ *
+ * a position is remembered once. a game that comes round to the same
+ * position three times does not end — the contract has no repetition
+ * rule — so the record is what lets the chooser see the loop and
+ * break it.
+ */
+export function shit_1170_chess_position_remember_fun(
+  db: Database,
+  game_id: SHIT_1170_CHESS_GAME_ID,
+  fen: string,
+  seen_at: number,
+): void {
+  db.query(
+    `INSERT INTO positions (game_id, fen, seen_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(game_id, fen) DO NOTHING;`,
+  ).run(JSON.stringify(game_id), fen, seen_at);
+}
+
+/**
+ * every position a game has been through.
+ */
+export function shit_1170_chess_positions_fun(
+  db: Database,
+  game_id: SHIT_1170_CHESS_GAME_ID,
+): string[] {
+  const rows = db
+    .query(
+      `SELECT fen FROM positions WHERE game_id = ? ORDER BY seen_at ASC;`,
+    )
+    .all(JSON.stringify(game_id)) as Array<{ fen: string }>;
+  return rows.map((row) => row.fen);
 }
 
 /**

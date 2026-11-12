@@ -17,4 +17,5 @@ export * from "./api";
 export * from "./signer";
 export * from "./store";
 export * from "./daemon";
+export * from "./decision";
 export * from "./cli";

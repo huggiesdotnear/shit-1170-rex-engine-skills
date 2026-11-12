@@ -38,6 +38,8 @@ import {
   shit_1170_chess_game_ids_fun,
   shit_1170_chess_is_queued_fun,
 } from "./chain";
+import { shit_1170_chess_decision_fun } from "./decision";
+import type { SHIT_1170_CHESS_DECISION } from "./decision";
 import {
   shit_1170_chess_api_position_fen_fun,
 } from "./api";
@@ -45,6 +47,7 @@ import {
   shit_1170_chess_choose_move_for_fen_fun,
   shit_1170_chess_choose_move_for_game_fun,
 } from "./move";
+import type { SHIT_1170_CHESS_CHOSEN_MOVE } from "./move";
 import {
   shit_1170_chess_move_gas_tgas_fun,
   shit_1170_chess_game_read_fun,
@@ -63,11 +66,15 @@ import {
 } from "./signer";
 import type { SHIT_1170_CHESS_SIGNER } from "./signer";
 import {
+  shit_1170_chess_answer_read_fun,
+  shit_1170_chess_decision_clear_fun,
   shit_1170_chess_games_close_fun,
   shit_1170_chess_games_db_open_fun,
   shit_1170_chess_games_open_fun,
   shit_1170_chess_games_put_fun,
   shit_1170_chess_log_append_fun,
+  shit_1170_chess_position_remember_fun,
+  shit_1170_chess_request_write_fun,
   shit_1170_chess_state_write_fun,
 } from "./store";
 import type {
@@ -87,6 +94,19 @@ export interface SHIT_1170_CHESS_DAEMON_OPTIONS {
   matchmake: boolean;
   /** accept challenges. default true. */
   accept: boolean;
+  /**
+   * ask an agent to choose the moves, instead of choosing them here.
+   *
+   * the daemon writes the decision to a file and waits for the answer.
+   * an agent reads the file, decides, and writes the answer back. the
+   * daemon then checks the answer against the legal list and makes
+   * the move.
+   *
+   * default false: the daemon decides by itself.
+   */
+  agent_decides: boolean;
+  /** how long the daemon waits for the agent's answer. */
+  agent_timeout_ms: number;
 }
 
 /**
@@ -433,6 +453,121 @@ export class SHIT_1170_CHESS_DAEMON {
   }
 
   /**
+   * choose the move for a position.
+   *
+   * there are two ways to do this, and the daemon is told which one
+   * to use when it starts:
+   *
+   *   - BY ITSELF. the program's own choice. it is the same search
+   *     the skill has always used, with the endgame knowledge and the
+   *     repetition avoidance added to it.
+   *
+   *   - BY AN AGENT. the daemon writes down what it wants decided and
+   *     waits. an agent reads the request, decides, and writes the
+   *     answer back. the answer is then checked against the legal
+   *     moves — an illegal answer costs nothing, because it is never
+   *     signed.
+   *
+   * in both cases the move that reaches the chain is LEGAL. that is
+   * the point of the split: the agent chooses, the engine guarantees.
+   */
+  private async choose_move_fun(
+    game_id: SHIT_1170_CHESS_GAME_ID,
+    decision: SHIT_1170_CHESS_DECISION,
+  ): Promise<SHIT_1170_CHESS_CHOSEN_MOVE | null> {
+    if (!this.options.agent_decides) return decision.recommended;
+
+    // the request id is the game id, so there is one request per game
+    // and an agent can find them all.
+    const id = JSON.stringify(game_id);
+
+    shit_1170_chess_request_write_fun(id, {
+      id,
+      game_id,
+      account_id: this.options.account_id,
+      asked_at: Date.now(),
+      position: {
+        fen: decision.fen,
+        board: decision.board,
+        turn: decision.turn,
+        white: decision.white,
+        black: decision.black,
+        material: decision.material,
+      },
+      game: decision.game,
+      candidates: decision.candidates,
+      recommended: decision.recommended,
+      how_to_answer: {
+        write: `~/.shit-1170-rex-engine/chess/decisions/${id}.answer.json`,
+        shape: { mv: "e2e4", note: "why this move" },
+        note: "the move must be one of the candidates, in the contract's notation. the daemon checks it before it signs.",
+      },
+    });
+
+    shit_1170_chess_log_append_fun({
+      at: Date.now(),
+      event: "asked_agent",
+      detail: { game_id, request: id },
+    });
+
+    // wait for the answer.
+    const deadline = Date.now() + this.options.agent_timeout_ms;
+    while (!this.stopped && Date.now() < deadline) {
+      const answer = shit_1170_chess_answer_read_fun(id);
+      if (answer?.mv) {
+        shit_1170_chess_decision_clear_fun(id);
+
+        // the answer is checked against the legal moves. an answer
+        // that names a move that is not legal is refused, and the
+        // daemon falls back to its own choice.
+        const match = decision.candidates.find(
+          (candidate) =>
+            candidate.mv === answer.mv || candidate.san === answer.mv,
+        );
+
+        if (match) {
+          shit_1170_chess_log_append_fun({
+            at: Date.now(),
+            event: "agent_played_move",
+            detail: {
+              game_id,
+              mv: match.mv,
+              san: match.san,
+              note: answer.note ?? null,
+            },
+          });
+          return {
+            mv: match.mv,
+            san: match.san,
+            from: match.from,
+            to: match.to,
+          };
+        }
+
+        shit_1170_chess_log_append_fun({
+          at: Date.now(),
+          event: "agent_move_illegal",
+          detail: { game_id, mv: answer.mv },
+        });
+        return decision.recommended;
+      }
+
+      await sleep_fun(500);
+    }
+
+    // nobody answered in time. the daemon plays its own move rather
+    // than letting the game sit — a game that waits for an agent that
+    // is not there is a game that never ends.
+    shit_1170_chess_decision_clear_fun(id);
+    shit_1170_chess_log_append_fun({
+      at: Date.now(),
+      event: "agent_no_answer",
+      detail: { game_id, waited_ms: this.options.agent_timeout_ms },
+    });
+    return decision.recommended;
+  }
+
+  /**
    * play a game — make a move if it is the agent's turn.
    */
   private async play_game_fun(game_id: SHIT_1170_CHESS_GAME_ID): Promise<void> {
@@ -446,10 +581,22 @@ export class SHIT_1170_CHESS_DAEMON {
         return;
       }
 
-      const fen = await shit_1170_chess_api_position_fen_fun(game_id);
-      const chosen = fen
-        ? shit_1170_chess_choose_move_for_fen_fun(fen)
-        : shit_1170_chess_choose_move_for_game_fun(game);
+      // the position is recorded before the move is chosen, so the
+      // chooser can see that a position has come round before. the
+      // contract has no repetition rule, and a loop would go on
+      // forever.
+      const decision = await shit_1170_chess_decision_fun(
+        game_id,
+        this.options.account_id,
+      );
+      shit_1170_chess_position_remember_fun(
+        this.db,
+        game_id,
+        decision.fen,
+        Date.now(),
+      );
+
+      const chosen = await this.choose_move_fun(game_id, decision);
 
       if (!chosen) {
         // no legal move — the game is over.
