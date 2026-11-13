@@ -104,7 +104,7 @@ the contract wants **coordinate notation**, not san.
 | explicit | `"e2 to e4"` |
 | kingside castle | `"O-O"` |
 | queenside castle | `"O-O-O"` |
-| promotion | `"e7 to e8 Q"` |
+| promotion | `"e7 to e8 queen"` |
 
 **`"Nf3"` and `"Qxe4"` FAIL.** a san move is rejected by the contract,
 and a rejected call is a failed transaction that still costs gas.
@@ -114,6 +114,10 @@ three forms need more than the two squares:
 - a **castling move** is `O-O` or `O-O-O`, because the king moves two
   squares and the two squares alone would not say which side
 - a **promotion** names the piece, because the contract cannot guess it
+  — and it spells it out in full: `"e7 to e8 queen"`, `"e7 to e8
+  rook"`, `"e7 to e8 bishop"` or `"e7 to e8 knight"`. `"e7 to e8 Q"` is
+  refused with `invalid piece name`, and a promotion without the
+  spaces — `"e7e8q"` — is refused with `invalid move`
 
 everything else is the two squares joined.
 

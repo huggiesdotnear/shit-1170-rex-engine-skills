@@ -33,6 +33,7 @@ import {
   shit_1170_chess_network_fun,
 } from "../src/cli";
 import { shit_1170_chess_decision_fun } from "../src/decision";
+import { shit_1170_chess_move_matches_fun } from "../src/move";
 import { shit_1170_chess_game_read_fun } from "../src/game";
 import { shit_1170_chess_move_gas_tgas_fun } from "../src/game";
 import { shit_1170_chess_play_move_payload_fun } from "../src/payload";
@@ -97,8 +98,8 @@ await shit_1170_chess_main_fun(async () => {
     );
   }
 
-  const match = decision.candidates.find(
-    (candidate) => candidate.mv === requested || candidate.san === requested,
+  const match = decision.candidates.find((candidate) =>
+    shit_1170_chess_move_matches_fun(candidate, requested),
   );
 
   if (!match) {

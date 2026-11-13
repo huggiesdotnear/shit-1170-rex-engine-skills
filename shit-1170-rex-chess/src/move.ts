@@ -218,12 +218,37 @@ export function shit_1170_chess_board_to_fen_fun(
  *   - `"e2 to e4"` explicit
  *   - `"O-O"`      kingside castle
  *   - `"O-O-O"`    queenside castle
- *   - `"e7 to e8 Q"` a promotion
+ *   - `"e7 to e8 queen"` a promotion
  *
  * a plain move is the two squares joined. a castling move is the
  * castle form, because the king moves two squares in a castle and the
  * two squares alone would not say which side. a promotion needs the
- * piece, because the contract cannot guess it.
+ * spaces and the piece spelled out in full, because the contract
+ * cannot guess it: `"e7 to e8 Q"` is refused with `invalid piece
+ * name`.
+ */
+/**
+ * the piece a promotion promotes to, in the CONTRACT's spelling.
+ *
+ * the contract parses the piece name against
+ * `kingqueenrookbishopknightpawn`, so the piece is spelled out in
+ * full. `"e7 to e8 Q"` is refused with `invalid piece name` — the
+ * forms that work are `"e7 to e8 queen"`, `"e7 to e8 rook"`,
+ * `"e7 to e8 bishop"` and `"e7 to e8 knight"`.
+ */
+const SHIT_1170_CHESS_PROMOTION_PIECES: Record<string, string> = {
+  q: "queen",
+  r: "rook",
+  b: "bishop",
+  n: "knight",
+};
+
+/**
+ * the move in the notation the contract takes.
+ *
+ * the contract accepts `"e2e4"`, `"e2 e4"` and `"e2 to e4"`, and the
+ * castles as `"O-O"` and `"O-O-O"`. a promotion needs the spaces and
+ * the piece in full: `"e7 to e8 queen"`.
  */
 export function shit_1170_chess_move_notation_fun(move: {
   from: string;
@@ -238,10 +263,72 @@ export function shit_1170_chess_move_notation_fun(move: {
   if (isQueenSideCastle) return "O-O-O";
 
   if (move.promotion) {
-    return `${move.from} to ${move.to} ${move.promotion.toUpperCase()}`;
+    const piece =
+      SHIT_1170_CHESS_PROMOTION_PIECES[move.promotion.toLowerCase()] ??
+      move.promotion;
+    return `${move.from} to ${move.to} ${piece}`;
   }
 
   return `${move.from}${move.to}`;
+}
+
+/**
+ * does a move string name this move?
+ *
+ * an agent may type the move in any of the forms people write them:
+ * the contract's own notation (`"b7 to b8 queen"`), san (`"b8=Q"`),
+ * or the two squares (`"b7b8"`). they all name the same move, and the
+ * one that is SENT is always the contract's own notation.
+ */
+export function shit_1170_chess_move_matches_fun(
+  move: {
+    mv: string;
+    san: string;
+    from?: string;
+    to?: string;
+  },
+  requested: string,
+): boolean {
+  const wanted = requested.trim();
+
+  // the contract's own notation, and san
+  if (wanted === move.mv || wanted === move.san) return true;
+
+  // the two squares, with or without a promotion piece
+  if (move.from && move.to) {
+    const squares = `${move.from}${move.to}`.toLowerCase();
+    const lower = wanted.toLowerCase().replace(/[\s-]/g, "");
+
+    if (lower === squares) return true;
+
+    // san with a promotion: "e8=q", "e8=queen". the san names the
+    // square it LANDS on, so the "from" square is not a prefix of it.
+    if (lower.startsWith(`${move.to.toLowerCase()}=`)) {
+      const piece = lower.slice(move.to.length + 1);
+      if (
+        piece === "q" ||
+        piece === "queen" ||
+        piece === "r" ||
+        piece === "rook" ||
+        piece === "b" ||
+        piece === "bishop" ||
+        piece === "n" ||
+        piece === "knight"
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // the contract's form without the spaces: "b7tob8queen"
+  if (
+    wanted.toLowerCase().replace(/\s/g, "") ===
+    move.mv.toLowerCase().replace(/\s/g, "")
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

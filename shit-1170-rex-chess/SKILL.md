@@ -103,9 +103,14 @@ the bins take it as `--game-id '<json array>'`, or the loose flags
 | explicit | `"e2 to e4"` |
 | kingside castle | `"O-O"` |
 | queenside castle | `"O-O-O"` |
-| promotion | `"e7 to e8 Q"` |
+| promotion | `"e7 to e8 queen"` |
 
 the columns are a–h and the rows are 1–8, counted from white's side.
+
+**a promotion spells the piece out in full.** `"e7 to e8 queen"`,
+`"e7 to e8 rook"`, `"e7 to e8 bishop"` and `"e7 to e8 knight"` are the
+forms the contract takes. `"e7 to e8 Q"` is refused with `invalid piece
+name`.
 
 **the move chooser, the board, the fen and the notation are in
 [MOVES.md](./DOCS/MOVES.md).**

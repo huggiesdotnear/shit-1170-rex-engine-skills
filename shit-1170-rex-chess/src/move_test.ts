@@ -26,6 +26,7 @@ import {
   shit_1170_chess_castling_rights_fun,
   shit_1170_chess_choose_move_fun,
   shit_1170_chess_legal_moves_fun,
+  shit_1170_chess_move_matches_fun,
   shit_1170_chess_move_notation_fun,
 } from "./move";
 import type { SHIT_1170_CHESS_GAME_INFO } from "./types";
@@ -155,7 +156,10 @@ describe("the notation", () => {
     ).toBe("O-O-O");
   });
 
-  test("a promotion names the piece", () => {
+  test("a promotion names the piece, spelled out in full", () => {
+    // the contract parses the piece name against
+    // `kingqueenrookbishopknightpawn`, so `"e7 to e8 Q"` is refused with
+    // `invalid piece name`. the piece is spelled out.
     expect(
       shit_1170_chess_move_notation_fun({
         from: "e7",
@@ -163,7 +167,72 @@ describe("the notation", () => {
         flags: "p",
         promotion: "q",
       }),
-    ).toBe("e7 to e8 Q");
+    ).toBe("e7 to e8 queen");
+
+    expect(
+      shit_1170_chess_move_notation_fun({
+        from: "e7",
+        to: "e8",
+        flags: "p",
+        promotion: "r",
+      }),
+    ).toBe("e7 to e8 rook");
+
+    expect(
+      shit_1170_chess_move_notation_fun({
+        from: "e7",
+        to: "e8",
+        flags: "p",
+        promotion: "b",
+      }),
+    ).toBe("e7 to e8 bishop");
+
+    expect(
+      shit_1170_chess_move_notation_fun({
+        from: "e7",
+        to: "e8",
+        flags: "p",
+        promotion: "n",
+      }),
+    ).toBe("e7 to e8 knight");
+  });
+});
+
+describe("matching a move an agent wrote", () => {
+  const promotion = {
+    mv: "e7 to e8 queen",
+    san: "e8=Q",
+    from: "e7",
+    to: "e8",
+  };
+
+  test("the contract's own notation matches", () => {
+    expect(shit_1170_chess_move_matches_fun(promotion, "e7 to e8 queen")).toBe(
+      true,
+    );
+  });
+
+  test("san matches", () => {
+    expect(shit_1170_chess_move_matches_fun(promotion, "e8=Q")).toBe(true);
+    expect(shit_1170_chess_move_matches_fun(promotion, "e8=queen")).toBe(true);
+  });
+
+  test("the two squares match", () => {
+    expect(shit_1170_chess_move_matches_fun(promotion, "e7e8")).toBe(true);
+  });
+
+  test("the contract's form without the spaces matches", () => {
+    expect(shit_1170_chess_move_matches_fun(promotion, "e7tob8queen")).toBe(
+      false,
+    );
+    expect(shit_1170_chess_move_matches_fun(promotion, "e7toe8queen")).toBe(
+      true,
+    );
+  });
+
+  test("a different move does not match", () => {
+    expect(shit_1170_chess_move_matches_fun(promotion, "e8=Q+")).toBe(false);
+    expect(shit_1170_chess_move_matches_fun(promotion, "e7e9")).toBe(false);
   });
 });
 

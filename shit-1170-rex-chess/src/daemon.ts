@@ -44,8 +44,10 @@ import {
   shit_1170_chess_api_position_fen_fun,
 } from "./api";
 import {
+  shit_1170_chess_board_to_fen_fun,
   shit_1170_chess_choose_move_for_fen_fun,
   shit_1170_chess_choose_move_for_game_fun,
+  shit_1170_chess_move_matches_fun,
 } from "./move";
 import type { SHIT_1170_CHESS_CHOSEN_MOVE } from "./move";
 import {
@@ -547,9 +549,8 @@ export class SHIT_1170_CHESS_DAEMON {
         // the answer is checked against the legal moves. an answer
         // that names a move that is not legal is refused, and the
         // daemon falls back to its own choice.
-        const match = decision.candidates.find(
-          (candidate) =>
-            candidate.mv === answer.mv || candidate.san === answer.mv,
+        const match = decision.candidates.find((candidate) =>
+          shit_1170_chess_move_matches_fun(candidate, answer.mv ?? ""),
         );
 
         if (match) {

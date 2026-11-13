@@ -41,6 +41,7 @@ import {
   shit_1170_chess_decisions_dir_fun,
   shit_1170_chess_request_path_fun,
 } from "../src/paths";
+import { shit_1170_chess_move_matches_fun } from "../src/move";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -153,8 +154,8 @@ await shit_1170_chess_main_fun(async () => {
     score: number;
   }>;
 
-  const match = candidates.find(
-    (candidate) => candidate.mv === mv || candidate.san === mv,
+  const match = candidates.find((candidate) =>
+    shit_1170_chess_move_matches_fun(candidate, mv),
   );
 
   if (!match) {
