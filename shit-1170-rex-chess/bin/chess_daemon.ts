@@ -13,6 +13,10 @@
 //   tmux new -s chess
 //   bun bin/chess_daemon.ts --account <account_id> --band 200
 //
+// the daemon asks an AGENT to choose the moves. it writes the decision
+// to a file and waits for the answer. `--decides-itself` turns that off,
+// for when there is no agent to ask.
+//
 // the key it signs with is the LIMITED access key the human signed
 // onto the account. without that key the daemon refuses to start —
 // the human has to sign the add_key first.
@@ -38,6 +42,7 @@ await shit_1170_chess_main_fun(async () => {
       "no-accept",
       "state",
       "agent-decides",
+      "decides-itself",
       "all-games",
     ],
   });
@@ -52,9 +57,16 @@ await shit_1170_chess_main_fun(async () => {
         "runs the daemon in the foreground. it does not return.",
         "--state reads the last written state instead of running.",
         "--band is the spread of the elo band it queues at. default 200.",
-        "--agent-decides asks an agent to choose the moves. the daemon writes",
+        "",
+        "BY DEFAULT THE DAEMON ASKS AN AGENT TO CHOOSE THE MOVES. it writes",
         "  the decision to a file and waits; the agent answers with the move.",
-        "--agent-timeout is how long it waits, in ms. default 120000.",
+        "  choosing a legal move is mechanical and chess.js already knows",
+        "  how. choosing a good one is judgement, and that is the agent's.",
+        "--decides-itself makes the daemon choose on its own instead. use it",
+        "  when there is no agent to ask.",
+        "--agent-decides is the old name for the default, and still works.",
+        "--agent-timeout is how long it waits for the agent's answer, in ms.",
+        "  default 120000.",
         "--all-games plays every open game. the default is ONE game at a time.",
       ],
     });
@@ -96,7 +108,11 @@ await shit_1170_chess_main_fun(async () => {
     band,
     matchmake: !args_bool_fun(args, "no-matchmaking"),
     accept: !args_bool_fun(args, "no-accept"),
-    agent_decides: args_bool_fun(args, "agent-decides"),
+    // the daemon asks an agent to choose the moves, unless it is told
+    // to decide by itself. choosing a legal move is mechanical and
+    // chess.js already knows how; choosing a good one is judgement,
+    // and that belongs to the agent.
+    agent_decides: !args_bool_fun(args, "decides-itself"),
     agent_timeout_ms:
       args_number_fun(args, "agent-timeout", 120_000) ?? 120_000,
     one_game_at_a_time: !args_bool_fun(args, "all-games"),

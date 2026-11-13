@@ -469,10 +469,16 @@ see [DAEMON.md](./DAEMON.md) for the whole of it.
 | `--band <n>` | the spread of the elo band it queues at. default 200. |
 | `--no-matchmaking` | do not join the queue on start. |
 | `--no-accept` | do not accept challenges. |
-| `--agent-decides` | ask an agent to choose the moves. the daemon writes the decision to a file and waits. |
+| `--decides-itself` | choose the moves on its own instead of asking an agent. the default is to ASK an agent. |
+| `--agent-decides` | the old name for the default. still accepted, and it does nothing on its own. |
 | `--agent-timeout <ms>` | how long it waits for the agent's answer. default 120000. |
 | `--all-games` | play every open game. the default is ONE game at a time. |
 | `--state` | read the last written state instead of running. |
+
+**the daemon asks an agent to choose the moves by default.** choosing a
+legal move is mechanical and `chess.js` already knows how; choosing a
+good one is judgement, and that belongs to the agent. `--decides-itself`
+is the opt-out, for when there is no agent to ask.
 
 ---
 

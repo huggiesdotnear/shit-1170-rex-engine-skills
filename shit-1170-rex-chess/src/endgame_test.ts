@@ -17,12 +17,24 @@
 
 import { describe, expect, test } from "bun:test";
 import { Chess } from "chess.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   shit_1170_chess_choose_move_fun,
   shit_1170_chess_legal_moves_fun,
   simple_evaluation_fun,
 } from "./move";
+import { shit_1170_chess_seen_positions_fun } from "./decision";
+import { shit_1170_chess_note_position_fun } from "./daemon";
+import { shit_1170_chess_is_my_turn_fun } from "./game";
+import type { SHIT_1170_CHESS_GAME } from "./game";
+import {
+  shit_1170_chess_games_db_open_fun,
+  shit_1170_chess_positions_fun,
+} from "./store";
+import type { SHIT_1170_CHESS_GAME_ID } from "./types";
 
 /**
  * every legal move in a position, with the evaluation after it.
@@ -176,5 +188,206 @@ describe("the repetition avoidance", () => {
     const chosen = shit_1170_chess_choose_move_fun(fen, seen);
     expect(chosen).not.toBeNull();
     expect(shit_1170_chess_legal_moves_fun(fen)).toContain(chosen!.mv);
+  });
+
+  test("the shuffle a live game fell into is broken by the history", () => {
+    // THE LIVE SHUFFLE. this is the position from the mainnet game
+    // [224274147,"sleet.near","sleet-ai.near"], where the daemon
+    // shuffled its rook between c8 and d8 for twenty moves, spending
+    // about 0.03 NEAR each time.
+    //
+    // it is black to move, and the rook wants to go to d8. the
+    // position it comes FROM — the target of the move — is a white to
+    // move position, and that is the one in the seen set.
+    const fen = "2r5/7p/1P5R/8/6k1/8/3K2BP/1N6 b - - 0 1";
+    const shuffle = "c8d8";
+
+    const legal = shit_1170_chess_legal_moves_fun(fen);
+    expect(legal).toContain(shuffle);
+
+    // without the history the chooser walks straight into the loop.
+    // this is the point of the test: the history is what breaks it.
+    const without_history = shit_1170_chess_choose_move_fun(fen);
+    expect(without_history).not.toBeNull();
+    expect(without_history!.mv).toBe(shuffle);
+
+    // with the history the shuffle is refused.
+    //
+    // the target of the move is a position where the OPPONENT is to
+    // move, so a daemon that recorded only its OWN turns could never
+    // have this position in its seen set — and the penalty could
+    // never fire. that is the bug this pins.
+    const seen = ["3r4/7p/1P5R/8/6k1/8/3K2BP/1N6 w - - 0 1"];
+
+    const with_history = shit_1170_chess_choose_move_fun(fen, seen);
+    expect(with_history).not.toBeNull();
+    expect(with_history!.mv).not.toBe(shuffle);
+    expect(legal).toContain(with_history!.mv);
+  });
+
+  test("the seen set is the union of both sides' positions", () => {
+    // the same shuffle position, but the seen set holds a white to
+    // move variant AND a black to move variant.
+    //
+    // the union is what makes the record whole: the api's history
+    // covers the game but can be stale, and the daemon's own record
+    // covers what it saw. neither alone is the whole game.
+    const fen = "2r5/7p/1P5R/8/6k1/8/3K2BP/1N6 b - - 0 1";
+    const shuffle = "c8d8";
+
+    // the api's history: the target of the shuffle, white to move.
+    const history = ["3r4/7p/1P5R/8/6k1/8/3K2BP/1N6 w - - 0 1"];
+    // the daemon's own record: the position itself, black to move.
+    const local = ["2r5/7p/1P5R/8/6k1/8/3K2BP/1N6 b - - 0 1"];
+
+    const seen = shit_1170_chess_seen_positions_fun(history, local);
+
+    // the union holds BOTH. choosing one or the other would drop
+    // either the shuffle's target or the position itself.
+    expect(seen).toContain(history[0]);
+    expect(seen).toContain(local[0]);
+
+    // and the shuffle is avoided.
+    const chosen = shit_1170_chess_choose_move_fun(fen, seen);
+    expect(chosen).not.toBeNull();
+    expect(chosen!.mv).not.toBe(shuffle);
+
+    const legal = shit_1170_chess_legal_moves_fun(fen);
+    expect(legal).toContain(chosen!.mv);
+  });
+});
+
+describe("the daemon's record of the positions", () => {
+  test("it records the position on the opponent's turn too", () => {
+    // THE THIRD HALF OF THE BUG.
+    //
+    // the daemon used to record a position only when it was the
+    // agent's turn to move. so its record held only AGENT-to-move
+    // positions.
+    //
+    // but the target of a candidate move is, by construction, a
+    // position where the OPPONENT is to move. so the record could
+    // never hold the target of any of the daemon's own candidates,
+    // and the repetition penalty could never fire.
+    //
+    // on the live mainnet game [224274147,"sleet.near","sleet-ai.near"]
+    // that is what happened: the daemon shuffled its rook between c8
+    // and d8 for twenty moves, at about 0.03 NEAR each. the contract
+    // has no repetition rule, so nothing ended the loop.
+    const home = mkdtempSync(join(tmpdir(), "rex-chess-positions-test-"));
+    process.env.SHIT_1170_REX_HOME = home;
+
+    const db = shit_1170_chess_games_db_open_fun();
+    const game_id: SHIT_1170_CHESS_GAME_ID = [
+      224274147,
+      "sleet.near",
+      "sleet-ai.near",
+    ];
+
+    // the position, black to move — the daemon is BLACK here, so this
+    // is the OPPONENT's turn and the daemon must not play. but it
+    // must still record it.
+    //
+    // the board is the live position: 2r5/7p/1P5R/8/6k1/8/3K2BP/1N6,
+    // with the rows the way the contract gives them — rank 1 first.
+    const board = [
+      " N      ",
+      "   K  BP",
+      "        ",
+      "      k ",
+      "        ",
+      " P     R",
+      "       p",
+      "  r     ",
+    ];
+
+    const game: SHIT_1170_CHESS_GAME = {
+      game_id,
+      info: {
+        white: { type: "Human", value: "sleet.near" },
+        black: { type: "Human", value: "sleet-ai.near" },
+        turn_color: "Black",
+        last_block_height: 224274147,
+        has_bets: false,
+      },
+      board,
+    };
+
+    // it is NOT the agent's turn.
+    expect(shit_1170_chess_is_my_turn_fun(game, "sleet.near")).toBe(false);
+
+    // and the position is recorded anyway — the helper records it
+    // FIRST and answers the turn question second. that order is the
+    // fix, and it is why the recording and the turn check are one
+    // function and not two.
+    const my_turn = shit_1170_chess_note_position_fun(
+      db,
+      game_id,
+      game,
+      "sleet.near",
+    );
+    expect(my_turn).toBe(false);
+
+    const recorded = shit_1170_chess_positions_fun(db, game_id);
+    expect(recorded.length).toBe(1);
+
+    // it is the position with BLACK to move — the opponent's turn.
+    // this is the half that was missing, and the half that makes the
+    // repetition check work: the target of a candidate move is an
+    // opponent-to-move position.
+    expect(recorded[0]).toBe("2r5/7p/1P5R/8/6k1/8/3K2BP/1N6 b - - 0 1");
+  });
+
+  test("it records the position on the agent's turn as well", () => {
+    // the same helper, on the other side of the turn. the record
+    // holds BOTH sides' positions, and that is the whole point: the
+    // target of a candidate move is an opponent-to-move position, so
+    // a record of only one side can never hold it.
+    const home = mkdtempSync(join(tmpdir(), "rex-chess-positions-test-"));
+    process.env.SHIT_1170_REX_HOME = home;
+
+    const db = shit_1170_chess_games_db_open_fun();
+    const game_id: SHIT_1170_CHESS_GAME_ID = [
+      224274147,
+      "sleet.near",
+      "sleet-ai.near",
+    ];
+
+    // the same board, but WHITE to move — so it IS the agent's turn,
+    // since the agent plays white in this game.
+    const board = [
+      " N      ",
+      "   K  BP",
+      "        ",
+      "      k ",
+      "        ",
+      " P     R",
+      "       p",
+      "  r     ",
+    ];
+
+    const game: SHIT_1170_CHESS_GAME = {
+      game_id,
+      info: {
+        white: { type: "Human", value: "sleet.near" },
+        black: { type: "Human", value: "sleet-ai.near" },
+        turn_color: "White",
+        last_block_height: 224274147,
+        has_bets: false,
+      },
+      board,
+    };
+
+    const my_turn = shit_1170_chess_note_position_fun(
+      db,
+      game_id,
+      game,
+      "sleet.near",
+    );
+    expect(my_turn).toBe(true);
+
+    const recorded = shit_1170_chess_positions_fun(db, game_id);
+    expect(recorded.length).toBe(1);
+    expect(recorded[0]).toBe("2r5/7p/1P5R/8/6k1/8/3K2BP/1N6 w - - 0 1");
   });
 });

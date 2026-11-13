@@ -134,6 +134,32 @@ function material_fun(game: Chess): number {
 }
 
 /**
+ * the positions a game has been through: the api's history AND the
+ * daemon's own record.
+ *
+ * the union, and not one or the other.
+ *
+ * the api's history covers the whole game, but it is an index, and an
+ * index can lag behind the chain — then it has nothing at all. the
+ * daemon's own record is always there, but it only holds what the
+ * daemon happened to observe.
+ *
+ * choosing between them means throwing half the game away, and it is
+ * the half that matters that gets thrown: a position the daemon saw
+ * is exactly the position the api is missing when it is behind.
+ *
+ * the order is the api's history first, then the daemon's own record,
+ * and the duplicates are dropped — the same position in both is one
+ * position, seen once.
+ */
+export function shit_1170_chess_seen_positions_fun(
+  history: string[],
+  local: string[],
+): string[] {
+  return [...new Set([...history, ...local])];
+}
+
+/**
  * read a position and every legal move, for an agent to decide from.
  *
  * the position comes from the api's fen when it has one, because the
@@ -158,7 +184,18 @@ export async function shit_1170_chess_decision_fun(
   // index is behind and has no history at all.
   const local = shit_1170_chess_positions_fun(db, game_id);
 
-  const seen = history.length > 0 ? history : local;
+  // THE SEEN SET IS THE UNION OF BOTH SOURCES.
+  //
+  // the api's history covers the whole game, but it is an INDEX: it
+  // can lag behind the chain, and then it has nothing at all. the
+  // daemon's own record covers what the daemon saw, and it is always
+  // there — but it only holds what the daemon happened to observe.
+  //
+  // neither one alone is the whole game, and choosing between them
+  // means throwing half of it away. so they are unioned: the api's
+  // history AND the daemon's own record. a position in either one is
+  // a position the game has been through.
+  const seen = shit_1170_chess_seen_positions_fun(history, local);
 
   const api_fen = history.length > 0 ? history[history.length - 1] : null;
   const fen = api_fen ?? shit_1170_chess_board_to_fen_fun(game.board, game.info);

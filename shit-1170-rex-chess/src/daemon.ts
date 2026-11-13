@@ -31,6 +31,7 @@
 
 import { api_protocol_pawns_events } from "@sleet-js/middleman-protocol-pawns-api";
 import { quiet_fun } from "@huggies/shit-1170-rex-engine-middleman";
+import type { Database } from "bun:sqlite";
 
 import {
   shit_1170_chess_account_fun,
@@ -105,7 +106,12 @@ export interface SHIT_1170_CHESS_DAEMON_OPTIONS {
    * daemon then checks the answer against the legal list and makes
    * the move.
    *
-   * default false: the daemon decides by itself.
+   * default TRUE. choosing a LEGAL move is mechanical and chess.js
+   * already knows how; choosing a GOOD one is judgement, and that
+   * belongs to the agent. so the daemon asks, and the agent answers.
+   *
+   * set it to false when there is no agent to ask — the daemon then
+   * plays its own choice.
    */
   agent_decides: boolean;
   /** how long the daemon waits for the agent's answer. */
@@ -488,15 +494,16 @@ export class SHIT_1170_CHESS_DAEMON {
    * there are two ways to do this, and the daemon is told which one
    * to use when it starts:
    *
+   *   - BY AN AGENT. the default. the daemon writes down what it
+   *     wants decided and waits. an agent reads the request, decides,
+   *     and writes the answer back. the answer is then checked
+   *     against the legal moves — an illegal answer costs nothing,
+   *     because it is never signed.
+   *
    *   - BY ITSELF. the program's own choice. it is the same search
    *     the skill has always used, with the endgame knowledge and the
-   *     repetition avoidance added to it.
-   *
-   *   - BY AN AGENT. the daemon writes down what it wants decided and
-   *     waits. an agent reads the request, decides, and writes the
-   *     answer back. the answer is then checked against the legal
-   *     moves — an illegal answer costs nothing, because it is never
-   *     signed.
+   *     repetition avoidance added to it. this is for when there is
+   *     no agent to ask.
    *
    * in both cases the move that reaches the chain is LEGAL. that is
    * the point of the split: the agent chooses, the engine guarantees.
@@ -606,23 +613,23 @@ export class SHIT_1170_CHESS_DAEMON {
     try {
       const game = await shit_1170_chess_game_read_fun(game_id);
 
-      if (!shit_1170_chess_is_my_turn_fun(game, this.options.account_id)) {
+      // the position is recorded, and then it is asked whether it is
+      // the agent's turn. the ORDER matters, and it is the whole
+      // point of the helper: see its own doc comment.
+      const my_turn = shit_1170_chess_note_position_fun(
+        this.db,
+        game_id,
+        game,
+        this.options.account_id,
+      );
+
+      if (!my_turn) {
         return;
       }
 
-      // the position is recorded before the move is chosen, so the
-      // chooser can see that a position has come round before. the
-      // contract has no repetition rule, and a loop would go on
-      // forever.
       const decision = await shit_1170_chess_decision_fun(
         game_id,
         this.options.account_id,
-      );
-      shit_1170_chess_position_remember_fun(
-        this.db,
-        game_id,
-        decision.fen,
-        Date.now(),
       );
 
       const chosen = await this.choose_move_fun(game_id, decision);
@@ -737,6 +744,50 @@ export class SHIT_1170_CHESS_DAEMON {
   ): Promise<ReturnType<typeof shit_1170_chess_game_info_fun>> {
     return shit_1170_chess_game_info_fun(game_id);
   }
+}
+
+/**
+ * record the position a game is in, and say whether it is the agent's
+ * turn to move.
+ *
+ * --- WHY THE RECORDING COMES FIRST ---
+ * the chooser penalises a candidate move by looking at the position
+ * the move LEADS TO, and the position a move leads to is, by
+ * construction, a position where the OPPONENT is to move.
+ *
+ * so a daemon that recorded only the positions where IT was to move
+ * would hold a set that can never contain the target of any of its
+ * own candidates. the repetition penalty could then never fire, no
+ * matter how big it was — and the contract has no repetition rule, so
+ * a loop would go on forever.
+ *
+ * that is what happened on the live mainnet game
+ * [224274147,"sleet.near","sleet-ai.near"]: the daemon shuffled its
+ * rook between c8 and d8 for twenty moves, at about 0.03 NEAR each.
+ *
+ * so the position is recorded WHATEVER turn it is, and the recording
+ * happens BEFORE the turn is checked. the board-derived FEN is used,
+ * because it is what the daemon can read on its own, without waiting
+ * for the api's index to catch up.
+ *
+ * the two are one function on purpose: a caller that records and then
+ * checks is a caller that can be changed into one that checks and then
+ * records, and that change is invisible.
+ */
+export function shit_1170_chess_note_position_fun(
+  db: Database,
+  game_id: SHIT_1170_CHESS_GAME_ID,
+  game: SHIT_1170_CHESS_GAME,
+  account_id: string,
+): boolean {
+  shit_1170_chess_position_remember_fun(
+    db,
+    game_id,
+    shit_1170_chess_board_to_fen_fun(game.board, game.info),
+    Date.now(),
+  );
+
+  return shit_1170_chess_is_my_turn_fun(game, account_id);
 }
 
 /**

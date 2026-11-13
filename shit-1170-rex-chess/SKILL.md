@@ -174,6 +174,15 @@ its state is written to a file:
 bun bin/chess_daemon.ts --state
 ```
 
+**the daemon asks an agent to choose the moves.** choosing a legal
+move is mechanical and `chess.js` already knows how; choosing a good
+one is judgement, and that belongs to the agent. the daemon writes the
+decision to a file and waits for the answer, and it checks the answer
+against the legal moves before it signs anything.
+
+`--decides-itself` turns the asking off, for when there is no agent to
+ask.
+
 **the daemon accepts every challenge it can** — that is what
 autonomous mode means — and it plays every game the matchmaking queue
 pairs it in. a challenge **with a wager** is skipped: a token deposit

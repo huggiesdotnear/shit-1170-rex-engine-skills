@@ -192,6 +192,50 @@ bun bin/chess_games.ts
 
 ---
 
+#### THE REPETITION
+
+**the contract has NO repetition rule.** a position seen three times
+does not end the game — it just goes on, forever. an agent that loops
+plays forever and never wins.
+
+so the daemon keeps a record of the positions each game has been
+through, and the chooser treats a move that returns to one of them as
+worth less.
+
+**the record holds BOTH sides' positions.** that is the whole trick,
+and it was a bug for a long time.
+
+the chooser penalises a candidate move by looking at the position the
+move **leads to** — and the position a move leads to is, by
+construction, a position where the **opponent** is to move. so a
+daemon that recorded only the positions where *it* was to move held a
+set that could never contain the target of any of its own candidates,
+and the repetition penalty could never fire, no matter how big it
+was.
+
+on the live mainnet game `[224274147,"sleet.near","sleet-ai.near"]` the
+daemon shuffled its rook between **c8 and d8** for twenty moves,
+spending about **0.03 NEAR** each time, because nothing ended the
+loop.
+
+so the daemon now records **every position it observes**, on every
+pass, whichever turn it is. the record and the turn check are one
+function, so that a change that puts the check first is not easy to
+make by accident.
+
+the seen set is also the **union** of two sources:
+
+- the **api's history**, which covers the whole game but is an index,
+  and an index can lag behind the chain — then it has nothing at all;
+- the **daemon's own record**, which is always there but only holds
+  what the daemon happened to observe.
+
+neither one alone is the whole game, and choosing between them throws
+half of it away. a position in either one is a position the game has
+been through.
+
+---
+
 #### THE STORE
 
 ```text
@@ -263,6 +307,13 @@ the flags:
 | `--no-matchmaking` | do not join the queue on start. |
 | `--no-accept` | do not accept challenges. |
 | `--state` | read the last written state instead of running. |
+| `--decides-itself` | choose the moves on its own instead of asking an agent. |
+| `--agent-timeout <ms>` | how long it waits for the agent's answer. default 120000. |
+| `--all-games` | play every open game. the default is ONE game at a time. |
+
+**the daemon asks an agent to choose the moves by default.** see THE
+AGENT DECIDES below. `--decides-itself` is the opt-out, for when there
+is no agent to ask.
 
 ---
 
@@ -330,10 +381,10 @@ blocking the account forever, so a crash does not need a human.
 
 #### THE AGENT DECIDES
 
-**the daemon can be told to propose, and let an agent choose.**
+**by default the daemon proposes, and lets an agent choose.**
 
 ```sh
-bun bin/chess_daemon.ts --account kcameau.near --agent-decides --agent-timeout 300000
+bun bin/chess_daemon.ts --account kcameau.near --agent-timeout 300000
 ```
 
 the split is deliberate:
@@ -343,8 +394,8 @@ the split is deliberate:
 - choosing a **good** move is judgement. which move to play against an
   opponent that is shuffling its king is not a search question.
 
-so in this mode the daemon does not choose. it writes the position
-and the legal moves to a file, and waits:
+so this is the DEFAULT, and the daemon does not choose on its own. it
+writes the position and the legal moves to a file, and waits:
 
 ```text
 ${HOME}/.shit-1170-rex-engine/chess/decisions/
@@ -370,6 +421,23 @@ that waits for an agent that is not there is a game that never ends.
 
 `chess_agent_play.ts` is a working agent: it reads the requests,
 searches with alpha-beta under a time budget, and answers them.
+
+#### DECIDING BY ITSELF
+
+**`--decides-itself` turns the asking off, for when there is no agent
+to ask.**
+
+```sh
+bun bin/chess_daemon.ts --account kcameau.near --decides-itself
+```
+
+the daemon then plays the program's own choice: the same search the
+skill has always used, with the endgame knowledge and the repetition
+avoidance added to it.
+
+the old `--agent-decides` flag is still accepted. it was the way to
+turn this ON, and it is now the default, so it does nothing on its
+own — it is kept so that an old command line does not break.
 
 ---
 

@@ -211,15 +211,21 @@ divided differently:
 - choosing a **good** move is judgement. which move to play against an
   opponent that is shuffling its king is not a search question.
 
-so the daemon can be told to **propose and let an agent decide**. it
-writes the position and the legal moves to a file, waits for an
-answer, checks the answer against the legal list, and signs it. an
-answer that names a move the contract would reject is refused before
+so the daemon **proposes and lets an agent decide**, and that is the
+DEFAULT. it writes the position and the legal moves to a file, waits
+for an answer, checks the answer against the legal list, and signs it.
+an answer that names a move the contract would reject is refused before
 anything is signed, so it costs nothing.
 
+`--decides-itself` turns the asking off, for when there is no agent to
+ask.
+
 ```sh
-# the daemon, asking an agent
-bun bin/chess_daemon.ts --account <account_id> --agent-decides --agent-timeout 300000
+# the daemon, asking an agent. this is the default.
+bun bin/chess_daemon.ts --account <account_id> --agent-timeout 300000
+
+# the daemon, playing on its own
+bun bin/chess_daemon.ts --account <account_id> --decides-itself
 
 # what the daemon is waiting for
 bun bin/chess_agent_decide.ts --list

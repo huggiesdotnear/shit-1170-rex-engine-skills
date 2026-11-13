@@ -439,11 +439,21 @@ export function shit_1170_chess_choose_move_fun(
 /**
  * the penalty for a move that returns to a position already seen.
  *
- * it is worth a pawn and a bit. that is enough to prefer any move
- * that goes somewhere new, and not enough to throw away a good move
- * that happens to repeat.
+ * it is worth a rook. that is much more than a pawn, and it has to
+ * be: a CYCLING move has to lose CLEARLY to any move that goes
+ * somewhere new, or the loop wins on a tie-break.
+ *
+ * the live game that exposed this had the shuffle and the best
+ * alternative within five points of each other, so a small penalty
+ * was a coin toss rather than a decision. with the penalty this
+ * large the cycle is never the move that is taken.
+ *
+ * it is still a penalty and not a ban. when the position is FORCED —
+ * there is one legal move, and it repeats — the move is still played,
+ * because refusing to play is worse than playing badly. the contract
+ * has no repetition rule, so a drawn-out game beats no game at all.
  */
-const REPETITION_PENALTY = 140;
+const REPETITION_PENALTY = 400;
 
 /**
  * a key for a position, for spotting repeats.
