@@ -37,12 +37,14 @@ import { shit_1170_chess_play_move_payload_fun } from "../src/payload";
 import {
   shit_1170_chess_choose_move_for_fen_fun,
   shit_1170_chess_choose_move_for_game_fun,
+  shit_1170_chess_board_to_fen_fun,
 } from "../src/move";
 import { shit_1170_chess_api_position_fen_fun } from "../src/api";
 import {
   shit_1170_chess_send_fun,
   shit_1170_chess_signer_find_fun,
 } from "../src/signer";
+import { shit_1170_chess_send_safe_fun } from "../src/send";
 
 await shit_1170_chess_main_fun(async () => {
   const args = parse_args_fun(process.argv.slice(2), {
@@ -124,7 +126,24 @@ await shit_1170_chess_main_fun(async () => {
   // the key is found AFTER the move is chosen, so a dry run needs no
   // key at all.
   const signer = shit_1170_chess_signer_find_fun(account_id);
-  const sent = await shit_1170_chess_send_fun(signer, payload, network);
+
+  // the send is checked against the chain. the rpc can answer 429
+  // AFTER the transaction has gone through, and a move sent twice is a
+  // move the contract refuses — a failed transaction that still costs
+  // gas.
+  const before = fen;
+  const sent = await shit_1170_chess_send_safe_fun(
+    () => shit_1170_chess_send_fun(signer, payload, network),
+    async () => before,
+    async () => {
+      const now_fen = await shit_1170_chess_api_position_fen_fun(game_id);
+      if (now_fen) return now_fen !== before;
+      const now = await shit_1170_chess_game_read_fun(game_id);
+      return (
+        shit_1170_chess_board_to_fen_fun(now.board, now.info) !== before
+      );
+    },
+  );
 
   print_json_fun({
     ok: true,
@@ -133,6 +152,7 @@ await shit_1170_chess_main_fun(async () => {
     chosen,
     gas_tgas,
     tx_hash: sent.tx_hash,
+    landed_without_answer: sent.landed_without_answer,
     public_key: signer.public_key,
     receiver_id: signer.receiver_id,
   });

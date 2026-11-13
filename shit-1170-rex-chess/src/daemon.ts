@@ -66,6 +66,7 @@ import {
   shit_1170_chess_send_fun,
   shit_1170_chess_signer_find_fun,
 } from "./signer";
+import { shit_1170_chess_send_safe_fun } from "./send";
 import type { SHIT_1170_CHESS_SIGNER } from "./signer";
 import {
   shit_1170_chess_answer_read_fun,
@@ -649,7 +650,22 @@ export class SHIT_1170_CHESS_DAEMON {
       );
 
       shit_1170_chess_games_put_fun(this.db, game_id, Date.now());
-      const sent = await shit_1170_chess_send_fun(this.signer, payload);
+
+      // the send is checked against the chain, because the rpc can
+      // answer 429 AFTER the transaction has gone through. a move sent
+      // twice is a move the contract refuses, and a refused move still
+      // costs gas.
+      const before = decision.fen;
+      const sent = await shit_1170_chess_send_safe_fun(
+        () => shit_1170_chess_send_fun(this.signer, payload),
+        async () => decision.fen,
+        async () => {
+          const now = await shit_1170_chess_game_read_fun(game_id);
+          return (
+            shit_1170_chess_board_to_fen_fun(now.board, now.info) !== before
+          );
+        },
+      );
 
       shit_1170_chess_log_append_fun({
         at: Date.now(),
@@ -660,6 +676,7 @@ export class SHIT_1170_CHESS_DAEMON {
           san: chosen.san,
           gas_tgas,
           tx_hash: sent.tx_hash,
+          landed_without_answer: sent.landed_without_answer,
         },
       });
     } catch (error) {

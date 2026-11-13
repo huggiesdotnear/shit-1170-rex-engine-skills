@@ -215,6 +215,9 @@ the events are `joined_matchmaking`, `already_queued`,
 `challenge_skipped_wagered`, `played_move`, `play_failed`,
 `poll_failed`, `stream_error` and `no_legal_move`.
 
+`played_move` carries `landed_without_answer` — true when the move went
+through but the rpc never said so. see THE SAFE SEND below.
+
 `already_queued` means the account already had a queue entry open —
 from an earlier run, or a previous daemon that was not stopped — so
 the daemon left it alone instead of asking for a second one. the
@@ -279,6 +282,32 @@ are **not** resigned — they stay open on the contract, and they are
 still there when the daemon comes back to them.
 
 `--all-games` plays every open game instead.
+
+---
+
+#### THE SAFE SEND
+
+**a failed send is not proof that the move did not land.**
+
+the rpc answers with HTTP 429 when it is rate-limited, and it
+sometimes does that AFTER the transaction has already gone through. the
+move is on the chain, and the answer that says so never arrived.
+
+that leaves two bad options:
+
+- treating it as a failure and retrying sends the SAME MOVE TWICE. a
+  move played twice is a move the contract refuses, and a refused move
+  is a failed transaction that still costs gas.
+- treating it as a success leaves the caller not knowing whether the
+  move happened.
+
+so the send is checked against the chain. the position is read before
+the call, and if the call throws, the position is read again. if it
+moved on, the move landed and the answer was merely lost. only when
+the position did NOT move is the call retried.
+
+the log says which happened: `landed_without_answer` is true when the
+move went through and the answer did not.
 
 ---
 

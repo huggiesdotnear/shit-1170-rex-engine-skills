@@ -320,10 +320,14 @@ bun bin/chess_play_move.ts --account crans.near --game-id '[206540279,"kcameau.n
   "chosen": { "san": "f6", "from": "f7", "to": "f6" },
   "gas_tgas": 150,
   "tx_hash": "...",
+  "landed_without_answer": false,
   "public_key": "ed25519:...",
   "receiver_id": "app.chess-game.near"
 }
 ```
+
+`landed_without_answer` is true when the move went through but the rpc
+never said so — see THE SAFE SEND in [DAEMON.md](./DAEMON.md).
 
 | flag | what it does |
 | --- | --- |
