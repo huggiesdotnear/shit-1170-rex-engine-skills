@@ -77,12 +77,12 @@
     {
       "id": 6,
       "prompt": "Make me a limited key on ref.finance.near that can call ft_swap. Give it an allowance of 0, I don't want it spending anything.",
-      "expected_output": "Refuses a zero allowance. The allowance is the key's gas budget, and a function call needs gas, so a key with a zero gas budget fails every call with NotEnoughAllowance before the contract is reached. Offers a real gas budget instead — 0.03 NEAR covers a 30 Tgas call, 1 NEAR covers a lot.",
+      "expected_output": "Refuses a zero allowance. The allowance is the key's gas budget, and a function call needs gas, so a key with a zero gas budget fails every call with NotEnoughAllowance before the contract is reached. Offers a real gas budget instead — the floor is 0.25 NEAR, and 1 NEAR covers a lot of calls.",
       "assertions": [
         "Does not queue a key with an allowance of 0",
         "Says the allowance is the gas budget and that a call needs gas",
         "Says a zero allowance fails with NotEnoughAllowance",
-        "Offers a real gas budget instead",
+        "Offers a gas budget of at least 0.25 NEAR",
         "Does not describe the allowance as a limit on the deposit or the funds"
       ],
       "files": []
@@ -94,6 +94,7 @@
       "assertions": [
         "Queues the key with a real allowance, never with the field left off",
         "Does not leave the allowance unset",
+        "Gives the key an allowance of at least 0.25 NEAR",
         "Says the allowance is a gas budget, not the deposit",
         "Does not claim the key may spend nothing",
         "Does not set the allowance to 0"
@@ -102,13 +103,25 @@
     },
     {
       "id": 8,
-      "prompt": "Make me a read-only key on ref.finance.near for the ft_swap quote method. I want to be able to check prices but never move anything.",
-      "expected_output": "Queues the add_key with the quote method named and a small real gas budget — a view method still costs gas, so it needs an allowance. 0.01 NEAR covers read-only calls.",
+      "prompt": "Make me a limited key on ref.finance.near for ft_swap, with just 0.03 NEAR of allowance so it can't do much.",
+      "expected_output": "Refuses an allowance under the 0.25 NEAR floor. The allowance is a lifetime gas budget, and 0.03 NEAR only covers a single 30 Tgas call — the key would fail with NotEnoughAllowance the second time it was used. Offers 0.25 NEAR as the floor and 1 NEAR for a key that will make many calls.",
       "assertions": [
-        "Names only the read method in the method list",
-        "Gives the key a real, non-zero allowance",
-        "Says a view call still needs gas",
-        "Does not leave the allowance unset"
+        "Does not queue a key with an allowance under 0.25 NEAR",
+        "Says the floor is 0.25 NEAR and what it covers",
+        "Says the allowance is spent over the key's whole life, not per call",
+        "Offers 0.25 NEAR or more"
+      ],
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "I want to read prices off ref.finance.near. Do I need a limited access key for that?",
+      "expected_output": "Says no. A view call goes to the RPC node and comes back with the answer — no account, no signature, no gas and nothing to approve — so a key is never made for reading. A key is for the calls that change state.",
+      "assertions": [
+        "Says a read needs no key",
+        "Says a view call needs no account and no signature",
+        "Does not queue a key",
+        "Does not offer a read-only key as the answer"
       ],
       "files": []
     }

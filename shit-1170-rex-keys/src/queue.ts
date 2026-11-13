@@ -27,11 +27,42 @@ import {
 // an `AddKey` action costs no deposit and its gas is the network's
 // default. the backend stores them as null and the wallet signs what
 // the action says.
+//
+// --- WHY 0.25 NEAR IS THE MINIMUM ALLOWANCE ---
+// the allowance is the key's gas budget, so it has to be big enough
+// for the calls the key will make. mainnet's gas price is
+// 1000000000 yoctoNEAR per gas unit, and the protocol caps the gas one
+// receipt may prepay at 300 Tgas, so the biggest call a key could ever
+// make costs 0.30 NEAR of allowance.
+//
+// 0.25 NEAR is the round figure just under that, and it is what
+// near-api-js uses as its own default for a function call key. it
+// covers a call of up to 250 Tgas.
+//
+// the floor exists so that a key cannot be made with a budget that is
+// too small for the contract it is aimed at, by accident. a key that
+// runs out of gas fails with `NotEnoughAllowance` at the moment it is
+// used, which is the worst time to find out.
 
 export const SHIT_1170_KEY_ACTION_ADD = "add_key";
 export const SHIT_1170_KEY_ACTION_REMOVE = "delete_key";
 
 export const SHIT_1170_DEFAULT_BASE_URL = "https://shit-1170.com";
+
+/**
+ * the smallest allowance this skill queues: 0.25 NEAR in yoctoNEAR.
+ */
+export const SHIT_1170_KEY_MIN_ALLOWANCE = "250000000000000000000000";
+
+/** the same number, for comparisons. */
+export const SHIT_1170_KEY_MIN_ALLOWANCE_BIG = BigInt(
+  SHIT_1170_KEY_MIN_ALLOWANCE,
+);
+
+/**
+ * the gas 0.25 NEAR buys at mainnet's gas price: 250 Tgas.
+ */
+export const SHIT_1170_KEY_MIN_ALLOWANCE_TGAS = 250;
 
 export interface SHIT_1170_KEY_ACTION_INPUT {
   /** `add_key` or `delete_key`. */

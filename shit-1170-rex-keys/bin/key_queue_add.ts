@@ -19,6 +19,9 @@ import {
   shit_1170_keys_db_open_fun,
   shit_1170_keys_db_put_fun,
   SHIT_1170_KEY_ACTION_ADD,
+  SHIT_1170_KEY_MIN_ALLOWANCE,
+  SHIT_1170_KEY_MIN_ALLOWANCE_BIG,
+  SHIT_1170_KEY_MIN_ALLOWANCE_TGAS,
   type SHIT_1170_KEY_ADDED,
   type SHIT_1170_KEY_GENERATED,
 } from "../src/index";
@@ -83,13 +86,19 @@ import { shit_1170_local_queue_record_put_fun } from "./local_queue";
 //     reached. a key that cannot make a call is not a key, so the bin
 //     refuses it too.
 //
+// --- WHY 0.25 NEAR IS THE FLOOR ---
+// a budget has to be big enough for the calls the key will make. the
+// floor is 0.25 NEAR, which covers a call of up to 250 Tgas at
+// mainnet's gas price. see `SHIT_1170_KEY_MIN_ALLOWANCE` in src/queue.ts.
+//
 // --- WHY THE ALLOWANCE IS A UNIT AMOUNT ---
 // the allowance is in yoctoNEAR — 24 decimals. a human amount like
 // `0.5` is NOT what goes here. use the unit conversion skill.
 //
-// 1 NEAR is `1000000000000000000000000`. mainnet's gas price is
-// 1000000000 yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR
-// of allowance and 1 NEAR covers a very large number of calls.
+// 0.25 NEAR is `250000000000000000000000` and 1 NEAR is
+// `1000000000000000000000000`. mainnet's gas price is 1000000000
+// yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR of
+// allowance and 1 NEAR covers a very large number of calls.
 
 function main_fun(): Promise<void> {
   const args = parse_args_fun(process.argv.slice(2), {
@@ -102,6 +111,7 @@ function main_fun(): Promise<void> {
         "key_queue_add --receiver-id <contract_id> --method <name> --allowance <yoctoNEAR> [--account <account_id>]",
         "key_queue_add --receiver-id <contract_id> --methods ft_swap --allowance 1000000000000000000000000",
         "--allowance is REQUIRED: it is the key's GAS budget in yoctoNEAR, not the deposit. a key always needs gas to make a call.",
+        "--allowance must be at least 250000000000000000000000 (0.25 NEAR), which covers a call of up to 250 Tgas.",
         "--allowance 0 is refused: a zero gas budget cannot make a call. an absent allowance would be unlimited gas, and that is refused too.",
         "--public-key <key> re-queues an addition that was refused, with that key",
         "--seed makes the key from a seed phrase; --show-seed prints it",
@@ -154,7 +164,7 @@ function main_fun(): Promise<void> {
     if (allowance_raw === null || allowance_raw.length === 0) {
       throw new Error(
         "--allowance is required: it is the key's gas budget, and a key with no allowance gets UNLIMITED gas, which is not what this skill hands out. " +
-          "pass an allowance that covers the calls the key will make (1 NEAR is 1000000000000000000000000, and 0.03 NEAR covers a 30 Tgas call).",
+          `pass at least ${SHIT_1170_KEY_MIN_ALLOWANCE} (0.25 NEAR), which covers a call of up to ${SHIT_1170_KEY_MIN_ALLOWANCE_TGAS} Tgas.`,
       );
     }
     if (!/^\d+$/.test(allowance_raw)) {
@@ -173,7 +183,24 @@ function main_fun(): Promise<void> {
     if (allowance === "0") {
       throw new Error(
         "--allowance 0 would give the key a zero gas budget: every call signed with it would be refused with NotEnoughAllowance before the contract is reached. " +
-          "a function call needs gas. pass an allowance that covers the calls (1 NEAR is 1000000000000000000000000, and 0.03 NEAR covers a 30 Tgas call).",
+          `a function call needs gas. pass at least ${SHIT_1170_KEY_MIN_ALLOWANCE} (0.25 NEAR), which covers a call of up to ${SHIT_1170_KEY_MIN_ALLOWANCE_TGAS} Tgas.`,
+      );
+    }
+
+    // --- WHY 0.25 NEAR IS THE FLOOR: the protocol caps the gas one
+    // receipt may prepay at 300 Tgas, and mainnet's gas price is
+    // 1000000000 yoctoNEAR per gas unit, so the largest call a key
+    // could ever make needs 0.30 NEAR of allowance. 0.25 NEAR is the
+    // round figure below that, and it is what near-api-js uses as its
+    // own default. a smaller budget is a key that cannot make the
+    // biggest calls, which is a footgun the human is not being told
+    // about, so the floor is enforced here rather than left to a
+    // miscalculation.
+    if (BigInt(allowance) < SHIT_1170_KEY_MIN_ALLOWANCE_BIG) {
+      throw new Error(
+        `--allowance must be at least ${SHIT_1170_KEY_MIN_ALLOWANCE} (0.25 NEAR), got ${allowance}. ` +
+          `0.25 NEAR covers a call of up to ${SHIT_1170_KEY_MIN_ALLOWANCE_TGAS} Tgas at mainnet's gas price. ` +
+          "use 1 NEAR for a key that will make many calls.",
       );
     }
 

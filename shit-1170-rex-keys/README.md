@@ -46,13 +46,14 @@ is 1000000000 yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR
 of allowance and 1 NEAR
 (`1000000000000000000000000`) covers a very large number of calls.
 
-**`--allowance` is required, and it is never 0.**
+**`--allowance` is required, and it is at least 0.25 NEAR.**
 
 | what you write | what the protocol does | what this skill does |
 | --- | --- | --- |
 | `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR | **this is the one it queues** |
 | nothing — no `--allowance` | reads it as **unlimited gas** | **refused** |
 | `--allowance 0` | every call fails with `NotEnoughAllowance` | **refused** |
+| anything under 0.25 NEAR | too small for the biggest calls | **refused** |
 
 an absent allowance is not the same as zero. the protocol reads a
 missing allowance as *unlimited gas*, and an unlimited-gas key can be
@@ -62,9 +63,17 @@ not hand those out.
 a zero allowance is a key that cannot make a single call — a function
 call needs gas, and it would fail before the contract is reached.
 
-`key_queue_add.ts` refuses both, before anything goes out. size the
-allowance from the calls the key will make: 0.01 NEAR for a read-only
-key, 0.03 NEAR for a write, 1 NEAR when the calls are not known.
+**0.25 NEAR is the floor.** it covers a call of up to 250 Tgas at
+mainnet's gas price, and the protocol's ceiling on the gas one receipt
+may prepay is 300 Tgas. use 1 NEAR for a key that will make more than
+a few calls — the allowance is a lifetime budget, not a per-call one.
+
+`key_queue_add.ts` refuses every allowance outside that range, before
+anything goes out.
+
+**reads need no key at all.** anyone can call a view method on the RPC
+node without an account, a signature or a gas budget. a key is for the
+calls that change state.
 
 the allowance is spent over the key's whole life, not per call, and it
 cannot be changed afterwards — to change it, add a new key.

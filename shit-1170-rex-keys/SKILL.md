@@ -49,8 +49,8 @@ mainnet's gas price is 1000000000 yoctoNEAR per gas unit, so:
 
 | the call | the gas | the allowance it needs |
 | --- | --- | --- |
-| a small view | 5 Tgas | 0.005 NEAR |
 | a typical write | 30 Tgas | 0.03 NEAR |
+| a heavy call | 100 Tgas | 0.10 NEAR |
 | the largest call | 300 Tgas | 0.30 NEAR |
 
 1 NEAR is `1000000000000000000000000`, and it covers a very large
@@ -63,7 +63,7 @@ be changed either — to change it, add a new key.
 
 ### --- EVERY KEY GETS A REAL ALLOWANCE ---
 
-**`--allowance` is required, and it is never 0.**
+**`--allowance` is required, and it is at least 0.25 NEAR.**
 
 the protocol has three states for the allowance field. this skill
 queues only one of them:
@@ -73,6 +73,7 @@ queues only one of them:
 | `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR | **this is the one it queues** |
 | nothing — no `--allowance` | reads it as **unlimited gas** | **refused** |
 | `--allowance 0` | a zero gas budget, and every call fails with `NotEnoughAllowance` | **refused** |
+| anything under 0.25 NEAR | a budget too small for the biggest calls | **refused** |
 
 **an absent allowance is NOT the same as zero, and neither is right
 here.** the protocol reads a missing allowance as *unlimited gas* —
@@ -86,32 +87,46 @@ function call needs gas, so it would fail with `NotEnoughAllowance`
 before the contract is reached. it would look usable and be dead on
 arrival.
 
-**so `key_queue_add.ts` throws on both.** a missing allowance and a
-zero allowance are refused before anything goes out, with the reason
-in plain words and a real number offered in their place. every key
-this skill queues carries a concrete gas budget.
+**so `key_queue_add.ts` throws on all of them.** a missing allowance, a
+zero allowance and a sub-floor allowance are refused before anything
+goes out, with the reason in plain words and a real number offered in
+their place. every key this skill queues carries a concrete gas budget.
 
-### --- SIZING THE ALLOWANCE ---
+### --- 0.25 NEAR IS THE FLOOR ---
 
-size it from the calls the key will actually make:
+**the smallest allowance this skill queues is 0.25 NEAR**
+(`250000000000000000000000`). it is the round figure just under the
+protocol's ceiling, and it is what near-api-js uses as its own default
+for a function call key.
 
-- **a key that only reads** — a view method, or a set of them. 0.005
-  NEAR per view call covers it, and 0.01 NEAR (`10000000000000000000000`)
-  is a sensible budget for a read-only key.
-- **a key that writes** — 30 Tgas a call is the usual figure, so
-  0.03 NEAR (`30000000000000000000000`) covers one write, and 1 NEAR
-  covers a very large number of them.
-- **a key that does both** — take the write figure and multiply by how
-  many writes it will make. 1 NEAR is the easy answer and is almost
-  always enough.
+**0.25 NEAR covers a call of up to 250 Tgas** at mainnet's gas price.
+the protocol caps the gas one receipt may prepay at 300 Tgas, and that
+largest possible call costs 0.30 NEAR — so 0.25 NEAR covers
+everything except the very largest calls.
 
-when the calls are not known, 1 NEAR is the safe budget. it is a
-ceiling on what a compromised key can burn, not a spend.
+**use 1 NEAR when the key will make more than a few calls.** the
+allowance is a lifetime budget, not a per-call one, so a key that will
+make many calls needs a budget for all of them. 1 NEAR
+(`1000000000000000000000000`) is the easy answer and is almost always
+enough.
+
+**the floor exists so a key cannot be made too small by accident.** a
+budget that runs out fails with `NotEnoughAllowance` at the moment the
+key is used, which is the worst time to find out.
 
 **a key's allowance has nothing to do with the deposit it attaches.**
 the attached deposit comes from the account's own balance and is
 limited by the contract, not by the key. the allowance only ever pays
 for gas.
+
+### --- READS NEED NO KEY ---
+
+**anyone can read a contract without an account and without a key.** a
+view call goes to the RPC node and comes back with the answer — no
+signature, no account, no gas, and nothing to approve.
+
+so a key is never made for reading. a key is for the calls that change
+state, and those are the ones that need a signature and a gas budget.
 
 ---
 
@@ -191,7 +206,7 @@ then.
 | `--receiver-id <contract>` | the contract the key may call. required |
 | `--method <name>` | one method the key may call |
 | `--methods <a,b,c>` | several methods the key may call |
-| `--allowance <yoctoNEAR>` | the key's **gas budget**. required, and never 0 |
+| `--allowance <yoctoNEAR>` | the key's **gas budget**. required, at least 0.25 NEAR |
 | `--account <account_id>` | the account the key is for. default: the stored one |
 | `--public-key <key>` | re-queue an addition that was refused, with that key |
 | `--seed` | make the key from a seed phrase |
@@ -199,15 +214,16 @@ then.
 
 **the allowance is the GAS BUDGET, in yoctoNEAR.** `0.5` is not what
 goes here. use the unit conversion skill to turn a human amount into
-the chain's unit amount. 1 NEAR is
-`1000000000000000000000000`, and 0.03 NEAR
-(`30000000000000000000000`) covers a 30 Tgas call.
+the chain's unit amount. 0.25 NEAR is
+`250000000000000000000000` and 1 NEAR is
+`1000000000000000000000000`.
 
-**`--allowance` is required.** a missing allowance would be unlimited
-gas, and `--allowance 0` would be a key that cannot make a call. both
-are refused. every key this skill queues has a real gas budget — size
-it from the calls the key will make, and use 1 NEAR when they are not
-known.
+**`--allowance` is required, and it is at least 0.25 NEAR.** a missing
+allowance would be unlimited gas, `--allowance 0` would be a key that
+cannot make a call, and anything under 0.25 NEAR would be a budget too
+small for the biggest calls. all three are refused. every key this
+skill queues has a real gas budget — 0.25 NEAR is the floor, and 1
+NEAR is the right answer for a key that will make many calls.
 
 **no method names means every method** on that contract. that is
 valid, and it is a bigger key than it looks. when the contract's method
