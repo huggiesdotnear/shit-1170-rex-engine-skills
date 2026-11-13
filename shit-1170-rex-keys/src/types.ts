@@ -59,9 +59,10 @@ export interface SHIT_1170_KEY_ADDED {
   /**
    * the gas budget in yoctoNEAR.
    *
-   * null means the key was offered with NO allowance, and the protocol
-   * reads an absent allowance as UNLIMITED gas. it never means "no gas
-   * allowed" — a zero allowance is refused at queue time.
+   * every key this skill queues carries a real number, so this is the
+   * budget the key was offered with. null only appears on a record
+   * that came from somewhere else, and it means the protocol's
+   * unlimited gas.
    */
   allowance: string | null;
   /** the queue id the action went out in, when it went out. */

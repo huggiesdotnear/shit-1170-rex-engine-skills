@@ -77,12 +77,12 @@
     {
       "id": 6,
       "prompt": "Make me a limited key on ref.finance.near that can call ft_swap. Give it an allowance of 0, I don't want it spending anything.",
-      "expected_output": "Refuses a zero allowance. The allowance is the key's gas budget, and a function call needs gas, so a key with a zero gas budget fails every call with NotEnoughAllowance before the contract is reached. Offers a real gas budget (0.03 NEAR covers a 30 Tgas call, 1 NEAR covers a lot) or no allowance at all, which means unlimited gas.",
+      "expected_output": "Refuses a zero allowance. The allowance is the key's gas budget, and a function call needs gas, so a key with a zero gas budget fails every call with NotEnoughAllowance before the contract is reached. Offers a real gas budget instead — 0.03 NEAR covers a 30 Tgas call, 1 NEAR covers a lot.",
       "assertions": [
         "Does not queue a key with an allowance of 0",
         "Says the allowance is the gas budget and that a call needs gas",
         "Says a zero allowance fails with NotEnoughAllowance",
-        "Offers a real gas budget or unlimited gas instead",
+        "Offers a real gas budget instead",
         "Does not describe the allowance as a limit on the deposit or the funds"
       ],
       "files": []
@@ -90,12 +90,25 @@
     {
       "id": 7,
       "prompt": "Make me a limited key on ref.finance.near for ft_swap. Don't set an allowance, I want it unrestricted.",
-      "expected_output": "Queues the add_key with no allowance field at all, and explains that an absent allowance means unlimited gas, not that the key may spend nothing.",
+      "expected_output": "Queues the add_key with a real gas budget, because a missing allowance means unlimited gas and this skill never hands those out. Explains that the allowance is a ceiling on the gas the key can burn and picks a budget that covers the calls.",
       "assertions": [
-        "Queues the key with the allowance field left off, not set to 0",
-        "Says that no allowance means unlimited gas",
+        "Queues the key with a real allowance, never with the field left off",
+        "Does not leave the allowance unset",
+        "Says the allowance is a gas budget, not the deposit",
         "Does not claim the key may spend nothing",
         "Does not set the allowance to 0"
+      ],
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "Make me a read-only key on ref.finance.near for the ft_swap quote method. I want to be able to check prices but never move anything.",
+      "expected_output": "Queues the add_key with the quote method named and a small real gas budget — a view method still costs gas, so it needs an allowance. 0.01 NEAR covers read-only calls.",
+      "assertions": [
+        "Names only the read method in the method list",
+        "Gives the key a real, non-zero allowance",
+        "Says a view call still needs gas",
+        "Does not leave the allowance unset"
       ],
       "files": []
     }

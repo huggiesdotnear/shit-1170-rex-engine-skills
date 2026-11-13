@@ -46,19 +46,25 @@ is 1000000000 yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR
 of allowance and 1 NEAR
 (`1000000000000000000000000`) covers a very large number of calls.
 
-| what you write | what the key gets |
-| --- | --- |
-| `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR |
-| **nothing** — no `--allowance` | **unlimited gas** |
-| `--allowance 0` | **refused** — a zero gas budget cannot make a call |
+**`--allowance` is required, and it is never 0.**
 
-**leaving `--allowance` off is not the same as zero.** an absent
-allowance field means unlimited gas, not no gas allowed.
+| what you write | what the protocol does | what this skill does |
+| --- | --- | --- |
+| `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR | **this is the one it queues** |
+| nothing — no `--allowance` | reads it as **unlimited gas** | **refused** |
+| `--allowance 0` | every call fails with `NotEnoughAllowance` | **refused** |
 
-**a zero allowance is refused by `key_queue_add.ts`.** every call
-signed with such a key would fail with `NotEnoughAllowance` before the
-contract is reached, so the bin throws rather than queue a key that
-cannot work.
+an absent allowance is not the same as zero. the protocol reads a
+missing allowance as *unlimited gas*, and an unlimited-gas key can be
+drained of gas by whoever holds it, with no ceiling. this skill does
+not hand those out.
+
+a zero allowance is a key that cannot make a single call — a function
+call needs gas, and it would fail before the contract is reached.
+
+`key_queue_add.ts` refuses both, before anything goes out. size the
+allowance from the calls the key will make: 0.01 NEAR for a read-only
+key, 0.03 NEAR for a write, 1 NEAR when the calls are not known.
 
 the allowance is spent over the key's whole life, not per call, and it
 cannot be changed afterwards — to change it, add a new key.

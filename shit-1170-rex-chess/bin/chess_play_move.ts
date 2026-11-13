@@ -9,7 +9,10 @@
 // the key must already exist. the human signs the add_key, and the
 // keys skill queues it:
 //
-//   bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 0
+//   bun bin/key_queue_add.ts --receiver-id app.chess-game.near --allowance 1000000000000000000000000
+//
+// the allowance is the key's GAS budget, so it is not 0 — a key with a
+// zero gas budget cannot make any call.
 //
 // --dry-run builds the payload and does NOT sign it, so the move can
 // be looked at before it goes out.

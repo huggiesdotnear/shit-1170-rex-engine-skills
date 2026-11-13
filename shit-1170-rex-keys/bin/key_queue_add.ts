@@ -65,16 +65,23 @@ import { shit_1170_local_queue_record_put_fun } from "./local_queue";
 // NOT a limit on the attached deposit, and it is NOT the account's
 // balance: a function call key cannot move NEAR at all.
 //
-// three states, and they mean three different things:
+// --- WHY THE ALLOWANCE IS REQUIRED, AND NEVER ZERO ---
+// a limited key always needs gas to make a call. the protocol has three
+// states for the allowance field, and this skill uses exactly one of
+// them:
 //
 //   - `--allowance <amount>` — a gas budget. the key may spend that much
-//     on gas, over its whole life, and then it is dead.
-//   - no `--allowance` — the field is left off the key, and the protocol
-//     reads that as UNLIMITED gas. this is the default, and it is valid.
+//     on gas, over its whole life, and then it is dead. THIS IS THE
+//     ONLY STATE THIS SKILL QUEUES.
+//
+//   - no allowance at all — the protocol reads an absent allowance as
+//     UNLIMITED gas. the protocol allows it. this skill does not hand
+//     out unlimited-gas keys, so the bin refuses it.
+//
 //   - `--allowance 0` — a zero gas budget. every call signed with the
 //     key is refused with `NotEnoughAllowance` before the contract is
-//     reached. the key is a key that cannot do anything, so it is
-//     refused here rather than queued.
+//     reached. a key that cannot make a call is not a key, so the bin
+//     refuses it too.
 //
 // --- WHY THE ALLOWANCE IS A UNIT AMOUNT ---
 // the allowance is in yoctoNEAR — 24 decimals. a human amount like
@@ -92,9 +99,10 @@ function main_fun(): Promise<void> {
     print_json_fun({
       ok: true,
       usage: [
-        "key_queue_add --receiver-id <contract_id> (--method <name> | --methods <a,b,c>) [--allowance <yoctoNEAR>] [--account <account_id>]",
+        "key_queue_add --receiver-id <contract_id> --method <name> --allowance <yoctoNEAR> [--account <account_id>]",
         "key_queue_add --receiver-id <contract_id> --methods ft_swap --allowance 1000000000000000000000000",
-        "--allowance is the key's GAS budget in yoctoNEAR, not the deposit. 0 is refused: a key with a zero gas budget cannot make a call. omit it for unlimited gas.",
+        "--allowance is REQUIRED: it is the key's GAS budget in yoctoNEAR, not the deposit. a key always needs gas to make a call.",
+        "--allowance 0 is refused: a zero gas budget cannot make a call. an absent allowance would be unlimited gas, and that is refused too.",
         "--public-key <key> re-queues an addition that was refused, with that key",
         "--seed makes the key from a seed phrase; --show-seed prints it",
       ],
@@ -133,27 +141,39 @@ function main_fun(): Promise<void> {
       }
     }
 
-    const allowance = args_string_fun(args, "allowance")?.trim() ?? null;
-    if (allowance !== null && !/^\d+$/.test(allowance)) {
+    // --- WHY THE ALLOWANCE IS REQUIRED: the allowance is the key's gas
+    // budget, and a limited key ALWAYS needs gas to make a call. the
+    // protocol reads an absent allowance as UNLIMITED gas, and this
+    // skill does not hand out unlimited-gas keys: a gas budget is the
+    // thing that keeps a shared key from being drained by whoever holds
+    // it, and it is the thing the human is approving.
+    //
+    // so every key this skill queues carries a real number. the number
+    // is sized from the calls the key will make — see the SKILL.md.
+    const allowance_raw = args_string_fun(args, "allowance")?.trim() ?? null;
+    if (allowance_raw === null || allowance_raw.length === 0) {
       throw new Error(
-        `--allowance must be a whole number of yoctoNEAR, got "${allowance}"`,
+        "--allowance is required: it is the key's gas budget, and a key with no allowance gets UNLIMITED gas, which is not what this skill hands out. " +
+          "pass an allowance that covers the calls the key will make (1 NEAR is 1000000000000000000000000, and 0.03 NEAR covers a 30 Tgas call).",
       );
     }
+    if (!/^\d+$/.test(allowance_raw)) {
+      throw new Error(
+        `--allowance must be a whole number of yoctoNEAR, got "${allowance_raw}"`,
+      );
+    }
+    const allowance: string = allowance_raw;
 
-    // --- WHY A ZERO ALLOWANCE IS REFUSED: the allowance is the key's gas
-    // budget, and a budget of zero means every call signed with the key
-    // fails with `NotEnoughAllowance` before the contract is reached. a
-    // function call needs gas, so a zero allowance is a key that cannot
-    // make one. queueing it would hand out a key that looks usable and
-    // is not, so it is refused here, with the reason in plain words.
-    //
-    // leaving `--allowance` off is NOT the same as zero. the field is
-    // then absent from the key, and the protocol reads an absent
-    // allowance as unlimited gas.
+    // --- WHY A ZERO ALLOWANCE IS REFUSED: a budget of zero means every
+    // call signed with the key fails with `NotEnoughAllowance` before the
+    // contract is reached. a function call needs gas, so a zero
+    // allowance is a key that cannot make one. queueing it would hand
+    // out a key that looks usable and is not, so it is refused here,
+    // with the reason in plain words.
     if (allowance === "0") {
       throw new Error(
         "--allowance 0 would give the key a zero gas budget: every call signed with it would be refused with NotEnoughAllowance before the contract is reached. " +
-          "a function call needs gas. pass an allowance that covers the calls (1 NEAR is 1000000000000000000000000, and 0.03 NEAR covers a 30 Tgas call), or leave --allowance off for unlimited gas.",
+          "a function call needs gas. pass an allowance that covers the calls (1 NEAR is 1000000000000000000000000, and 0.03 NEAR covers a 30 Tgas call).",
       );
     }
 

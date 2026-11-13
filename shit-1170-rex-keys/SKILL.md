@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-keys
-description: "Generate limited NEAR access keys and queue their addition and removal with the shit-1170 rex engine. Use this skill whenever the user mentions a limited access key, a limited key, a function call key, an access key, adding a key to an account, removing a key from an account, listing the keys of an account, a key that may call one contract, a key limited to certain methods, an allowance on a key, a gas budget for a key, or a seed phrase for a NEAR key — including when the user asks for a key for a bot, a script, a teammate or an integration, or asks which keys an account already has. Every key offered to an account is a fresh one, and the private key and the seed phrase are kept in the local store. The agent never signs: the addition or the removal is queued for a human to approve. The allowance on a key is its gas budget: a key always needs gas to make a call, an omitted allowance means unlimited gas, and a zero allowance is refused."
+description: "Generate limited NEAR access keys and queue their addition and removal with the shit-1170 rex engine. Use this skill whenever the user mentions a limited access key, a limited key, a function call key, an access key, adding a key to an account, removing a key from an account, listing the keys of an account, a key that may call one contract, a key limited to certain methods, an allowance on a key, a gas budget for a key, or a seed phrase for a NEAR key — including when the user asks for a key for a bot, a script, a teammate or an integration, or asks which keys an account already has. Every key offered to an account is a fresh one, and the private key and the seed phrase are kept in the local store. The agent never signs: the addition or the removal is queued for a human to approve. The allowance on a key is its gas budget: a key always needs gas to make a call, so every key gets a real allowance and both a missing allowance (unlimited gas) and a zero allowance are refused."
 ---
 
 # shit-1170 rex keys
@@ -61,24 +61,52 @@ is a budget, and it does not refill. when it is gone the key is dead
 and every call it signs fails. the allowance of an existing key cannot
 be changed either — to change it, add a new key.
 
-### --- THREE STATES, THREE MEANINGS ---
+### --- EVERY KEY GETS A REAL ALLOWANCE ---
 
-| what you write | what the key gets | what happens |
+**`--allowance` is required, and it is never 0.**
+
+the protocol has three states for the allowance field. this skill
+queues only one of them:
+
+| what you write | what the protocol does | what this skill does |
 | --- | --- | --- |
-| `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR | works, until the budget is spent |
-| **nothing** — no `--allowance` | **unlimited gas** | works, forever |
-| `--allowance 0` | a zero gas budget | **every call fails with `NotEnoughAllowance`** |
+| `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR | **this is the one it queues** |
+| nothing — no `--allowance` | reads it as **unlimited gas** | **refused** |
+| `--allowance 0` | a zero gas budget, and every call fails with `NotEnoughAllowance` | **refused** |
 
-**leaving `--allowance` off is NOT the same as zero.** the field is
-then absent from the key, and the protocol reads an absent allowance
-as *unlimited gas*, not as *no gas allowed*.
+**an absent allowance is NOT the same as zero, and neither is right
+here.** the protocol reads a missing allowance as *unlimited gas* —
+that is what nearcore does when the field is absent. an unlimited-gas
+key can be drained of gas by whoever holds it, with no ceiling. this
+skill does not hand those out: the gas budget is the thing that keeps a
+shared key bounded, and it is the thing the human is approving.
 
-**a zero allowance is never right, and this skill refuses to queue
-one.** a function call needs gas, so a zero allowance is a key that
-cannot make a single call. it would look usable and be dead on arrival,
-so `key_queue_add.ts` throws before anything goes out. if a request
-asks for a key with no gas, the answer is to give it a real budget, or
-to leave the allowance off for unlimited gas.
+**a zero allowance is a key that cannot make a single call.** a
+function call needs gas, so it would fail with `NotEnoughAllowance`
+before the contract is reached. it would look usable and be dead on
+arrival.
+
+**so `key_queue_add.ts` throws on both.** a missing allowance and a
+zero allowance are refused before anything goes out, with the reason
+in plain words and a real number offered in their place. every key
+this skill queues carries a concrete gas budget.
+
+### --- SIZING THE ALLOWANCE ---
+
+size it from the calls the key will actually make:
+
+- **a key that only reads** — a view method, or a set of them. 0.005
+  NEAR per view call covers it, and 0.01 NEAR (`10000000000000000000000`)
+  is a sensible budget for a read-only key.
+- **a key that writes** — 30 Tgas a call is the usual figure, so
+  0.03 NEAR (`30000000000000000000000`) covers one write, and 1 NEAR
+  covers a very large number of them.
+- **a key that does both** — take the write figure and multiply by how
+  many writes it will make. 1 NEAR is the easy answer and is almost
+  always enough.
+
+when the calls are not known, 1 NEAR is the safe budget. it is a
+ceiling on what a compromised key can burn, not a spend.
 
 **a key's allowance has nothing to do with the deposit it attaches.**
 the attached deposit comes from the account's own balance and is
@@ -163,7 +191,7 @@ then.
 | `--receiver-id <contract>` | the contract the key may call. required |
 | `--method <name>` | one method the key may call |
 | `--methods <a,b,c>` | several methods the key may call |
-| `--allowance <yoctoNEAR>` | the key's **gas budget**. omit it for unlimited gas |
+| `--allowance <yoctoNEAR>` | the key's **gas budget**. required, and never 0 |
 | `--account <account_id>` | the account the key is for. default: the stored one |
 | `--public-key <key>` | re-queue an addition that was refused, with that key |
 | `--seed` | make the key from a seed phrase |
@@ -175,11 +203,11 @@ the chain's unit amount. 1 NEAR is
 `1000000000000000000000000`, and 0.03 NEAR
 (`30000000000000000000000`) covers a 30 Tgas call.
 
-**`--allowance 0` is refused.** a zero gas budget means every call
-signed with the key fails with `NotEnoughAllowance` before the contract
-is reached, so the bin throws rather than queue a key that cannot
-work. **no `--allowance` at all is unlimited gas**, and that is
-valid — it is the default.
+**`--allowance` is required.** a missing allowance would be unlimited
+gas, and `--allowance 0` would be a key that cannot make a call. both
+are refused. every key this skill queues has a real gas budget — size
+it from the calls the key will make, and use 1 NEAR when they are not
+known.
 
 **no method names means every method** on that contract. that is
 valid, and it is a bigger key than it looks. when the contract's method
@@ -289,9 +317,10 @@ are the agent's own and which were made by somebody else.
 
 **`"allowance": null` on a limited key means UNLIMITED gas**, not "no
 gas". it is the chain's way of saying the key has no allowance field.
-the same null on a full access key means nothing at all — a full access
-key has no allowance, because it is the account and pays for its own
-gas out of the balance.
+this skill never queues one, but other tools do, so a key read off the
+chain may carry it. the same null on a full access key means nothing at
+all — a full access key has no allowance, because it is the account and
+pays for its own gas out of the balance.
 
 ---
 
@@ -350,10 +379,10 @@ that key.
 call every method on a contract is a different thing from one that may
 call two, and the human is the one approving it.
 
-**say how much gas it gets.** a key with a real gas budget and a key
-with unlimited gas are different offers, and a key with no gas is a key
-that cannot work. the human approves the number, so the number goes to
-them in plain words.
+**say how much gas it gets.** the gas budget is a ceiling on what the
+key can burn, and the human approves the number. say it in plain
+words — "1 NEAR of gas, which covers thousands of calls" — and say
+whether the key only reads or also writes.
 
 ---
 

@@ -43,12 +43,11 @@ export interface SHIT_1170_KEY_ACTION_INPUT {
   /** the methods the key may call. empty means every method. */
   method_names?: string[];
   /**
-   * the gas budget in yoctoNEAR.
+   * the gas budget in yoctoNEAR. required for an addition.
    *
-   * omitted means unlimited gas, which is what the protocol reads an
-   * absent allowance as. a zero allowance is refused by the bin: a
-   * function call needs gas, so a zero budget is a key that cannot
-   * make one.
+   * every key this skill queues carries a real number. the protocol
+   * would read an absent allowance as unlimited gas and a zero as a key
+   * that cannot make a call, and this skill refuses both.
    */
   allowance?: string | null;
 }
@@ -89,18 +88,18 @@ export function shit_1170_key_action_transaction_fun(
     }
     transaction.keyReceiverId = receiverId;
     transaction.keyMethodNames = input.method_names ?? [];
-    // --- WHY THE ALLOWANCE IS OMITTED AND NOT SENT AS NULL: the wire
-    // type says `string | undefined`, and an omitted field and a null
-    // one are not the same thing to the backend — the key action shape
-    // rule reads the field as absent. and absent is what an UNLIMITED
-    // gas budget looks like on a function call key: the protocol reads
-    // a missing allowance as "no gas limit", not as "no gas allowed".
-    // a key with a zero allowance would be a key that cannot make a
-    // call, so the bin refuses one before it gets here.
+    // --- WHY THE ALLOWANCE IS REQUIRED HERE: a limited key always needs
+    // gas to make a call. the protocol reads a missing allowance as
+    // unlimited gas and a zero allowance as a key that cannot make a
+    // call, and the bin refuses both before it gets here. so the field
+    // is always sent, and it is always a real number.
     const allowance = input.allowance?.trim();
-    if (allowance !== undefined && allowance.length > 0) {
-      transaction.keyAllowance = allowance;
+    if (allowance === undefined || allowance.length === 0) {
+      throw new Error(
+        "an add_key must name an allowance: it is the key's gas budget, and a key always needs gas to make a call",
+      );
     }
+    transaction.keyAllowance = allowance;
   }
 
   return transaction;
