@@ -73,6 +73,31 @@
         "Sends the allowance as a string"
       ],
       "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Make me a limited key on ref.finance.near that can call ft_swap. Give it an allowance of 0, I don't want it spending anything.",
+      "expected_output": "Refuses a zero allowance. The allowance is the key's gas budget, and a function call needs gas, so a key with a zero gas budget fails every call with NotEnoughAllowance before the contract is reached. Offers a real gas budget (0.03 NEAR covers a 30 Tgas call, 1 NEAR covers a lot) or no allowance at all, which means unlimited gas.",
+      "assertions": [
+        "Does not queue a key with an allowance of 0",
+        "Says the allowance is the gas budget and that a call needs gas",
+        "Says a zero allowance fails with NotEnoughAllowance",
+        "Offers a real gas budget or unlimited gas instead",
+        "Does not describe the allowance as a limit on the deposit or the funds"
+      ],
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "Make me a limited key on ref.finance.near for ft_swap. Don't set an allowance, I want it unrestricted.",
+      "expected_output": "Queues the add_key with no allowance field at all, and explains that an absent allowance means unlimited gas, not that the key may spend nothing.",
+      "assertions": [
+        "Queues the key with the allowance field left off, not set to 0",
+        "Says that no allowance means unlimited gas",
+        "Does not claim the key may spend nothing",
+        "Does not set the allowance to 0"
+      ],
+      "files": []
     }
   ]
 }

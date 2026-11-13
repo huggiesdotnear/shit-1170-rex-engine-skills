@@ -56,7 +56,13 @@ export interface SHIT_1170_KEY_ADDED {
   receiver_id: string | null;
   /** the methods the key may call. empty means every method. */
   method_names: string[];
-  /** the allowance in yoctoNEAR. null means the key may spend nothing. */
+  /**
+   * the gas budget in yoctoNEAR.
+   *
+   * null means the key was offered with NO allowance, and the protocol
+   * reads an absent allowance as UNLIMITED gas. it never means "no gas
+   * allowed" — a zero allowance is refused at queue time.
+   */
   allowance: string | null;
   /** the queue id the action went out in, when it went out. */
   queue_id: string | null;
@@ -82,7 +88,12 @@ export interface SHIT_1170_KEY_ON_CHAIN {
   receiver_id: string | null;
   /** the methods the key may call. empty means every method. */
   method_names: string[];
-  /** the allowance in yoctoNEAR. */
+  /**
+   * the gas budget in yoctoNEAR, as the chain reports it.
+   *
+   * null means the key has NO allowance field, which the protocol reads
+   * as unlimited gas.
+   */
   allowance: string | null;
   /** the nonce of the key. */
   nonce: number;

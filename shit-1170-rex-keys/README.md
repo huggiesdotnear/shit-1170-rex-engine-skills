@@ -34,6 +34,35 @@ bun bin/key_list.ts
 bun bin/key_chain.ts --account-id sleet.near
 ```
 
+## the allowance is the gas budget
+
+the `--allowance` on a limited key is **how much gas the key may
+spend** — not the deposit, and not the account's balance. a function
+call key cannot move NEAR at all; it can only pay for gas.
+
+the contract takes `gas_limit x gas_price` out of the allowance before
+the call runs, and the refund comes back afterwards. mainnet's gas price
+is 1000000000 yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR
+of allowance and 1 NEAR
+(`1000000000000000000000000`) covers a very large number of calls.
+
+| what you write | what the key gets |
+| --- | --- |
+| `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR |
+| **nothing** — no `--allowance` | **unlimited gas** |
+| `--allowance 0` | **refused** — a zero gas budget cannot make a call |
+
+**leaving `--allowance` off is not the same as zero.** an absent
+allowance field means unlimited gas, not no gas allowed.
+
+**a zero allowance is refused by `key_queue_add.ts`.** every call
+signed with such a key would fail with `NotEnoughAllowance` before the
+contract is reached, so the bin throws rather than queue a key that
+cannot work.
+
+the allowance is spent over the key's whole life, not per call, and it
+cannot be changed afterwards — to change it, add a new key.
+
 ## the two stores
 
 every key this agent generates is kept in a sqlite file, and every key

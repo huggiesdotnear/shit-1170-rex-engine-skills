@@ -42,7 +42,14 @@ export interface SHIT_1170_KEY_ACTION_INPUT {
   receiver_id?: string | null;
   /** the methods the key may call. empty means every method. */
   method_names?: string[];
-  /** the allowance in yoctoNEAR. */
+  /**
+   * the gas budget in yoctoNEAR.
+   *
+   * omitted means unlimited gas, which is what the protocol reads an
+   * absent allowance as. a zero allowance is refused by the bin: a
+   * function call needs gas, so a zero budget is a key that cannot
+   * make one.
+   */
   allowance?: string | null;
 }
 
@@ -85,8 +92,11 @@ export function shit_1170_key_action_transaction_fun(
     // --- WHY THE ALLOWANCE IS OMITTED AND NOT SENT AS NULL: the wire
     // type says `string | undefined`, and an omitted field and a null
     // one are not the same thing to the backend — the key action shape
-    // rule reads the field as absent. a key with no allowance may spend
-    // nothing, and that is the default when the field is not there.
+    // rule reads the field as absent. and absent is what an UNLIMITED
+    // gas budget looks like on a function call key: the protocol reads
+    // a missing allowance as "no gas limit", not as "no gas allowed".
+    // a key with a zero allowance would be a key that cannot make a
+    // call, so the bin refuses one before it gets here.
     const allowance = input.allowance?.trim();
     if (allowance !== undefined && allowance.length > 0) {
       transaction.keyAllowance = allowance;

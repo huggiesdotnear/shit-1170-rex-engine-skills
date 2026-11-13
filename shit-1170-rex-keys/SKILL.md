@@ -1,6 +1,6 @@
 ---
 name: shit-1170-rex-keys
-description: "Generate limited NEAR access keys and queue their addition and removal with the shit-1170 rex engine. Use this skill whenever the user mentions a limited access key, a limited key, a function call key, an access key, adding a key to an account, removing a key from an account, listing the keys of an account, a key that may call one contract, a key limited to certain methods, an allowance on a key, or a seed phrase for a NEAR key — including when the user asks for a key for a bot, a script, a teammate or an integration, or asks which keys an account already has. Every key offered to an account is a fresh one, and the private key and the seed phrase are kept in the local store. The agent never signs: the addition or the removal is queued for a human to approve."
+description: "Generate limited NEAR access keys and queue their addition and removal with the shit-1170 rex engine. Use this skill whenever the user mentions a limited access key, a limited key, a function call key, an access key, adding a key to an account, removing a key from an account, listing the keys of an account, a key that may call one contract, a key limited to certain methods, an allowance on a key, a gas budget for a key, or a seed phrase for a NEAR key — including when the user asks for a key for a bot, a script, a teammate or an integration, or asks which keys an account already has. Every key offered to an account is a fresh one, and the private key and the seed phrase are kept in the local store. The agent never signs: the addition or the removal is queued for a human to approve. The allowance on a key is its gas budget: a key always needs gas to make a call, an omitted allowance means unlimited gas, and a zero allowance is refused."
 ---
 
 # shit-1170 rex keys
@@ -24,8 +24,8 @@ app with their wallet, exactly like every other queued transaction.
 a NEAR account has access keys. one of them is the account itself — the
 **full access key**, which can move the money and do anything the
 account can do. the others are **limited keys**: each one names a
-single contract, the methods it may call on that contract, and how much
-of the attached deposit it may spend.
+single contract, the methods it may call on that contract, and the gas
+it may spend doing it.
 
 a limited key is safe to hand to somebody else. a bot, a script, a
 teammate, a service. it cannot move the account's funds and it cannot
@@ -34,6 +34,56 @@ touch anything but the one contract it was made for.
 **a full access key is the account.** removing one locks the holder out
 of their own money, so the engine refuses to queue that — and so does
 this skill, before the request goes out.
+
+---
+
+#### THE ALLOWANCE IS THE GAS BUDGET
+
+**the allowance is how much gas the key may spend.** it is not the
+deposit, and it is not the account's balance. a function call key
+cannot move NEAR at all — it can only pay for gas.
+
+the contract takes `gas_limit x gas_price` out of the key's allowance
+before the call runs, and the refund comes back to the key afterwards.
+mainnet's gas price is 1000000000 yoctoNEAR per gas unit, so:
+
+| the call | the gas | the allowance it needs |
+| --- | --- | --- |
+| a small view | 5 Tgas | 0.005 NEAR |
+| a typical write | 30 Tgas | 0.03 NEAR |
+| the largest call | 300 Tgas | 0.30 NEAR |
+
+1 NEAR is `1000000000000000000000000`, and it covers a very large
+number of calls.
+
+**the allowance is spent over the key's whole life, not per call.** it
+is a budget, and it does not refill. when it is gone the key is dead
+and every call it signs fails. the allowance of an existing key cannot
+be changed either — to change it, add a new key.
+
+### --- THREE STATES, THREE MEANINGS ---
+
+| what you write | what the key gets | what happens |
+| --- | --- | --- |
+| `--allowance 1000000000000000000000000` | a gas budget of 1 NEAR | works, until the budget is spent |
+| **nothing** — no `--allowance` | **unlimited gas** | works, forever |
+| `--allowance 0` | a zero gas budget | **every call fails with `NotEnoughAllowance`** |
+
+**leaving `--allowance` off is NOT the same as zero.** the field is
+then absent from the key, and the protocol reads an absent allowance
+as *unlimited gas*, not as *no gas allowed*.
+
+**a zero allowance is never right, and this skill refuses to queue
+one.** a function call needs gas, so a zero allowance is a key that
+cannot make a single call. it would look usable and be dead on arrival,
+so `key_queue_add.ts` throws before anything goes out. if a request
+asks for a key with no gas, the answer is to give it a real budget, or
+to leave the allowance off for unlimited gas.
+
+**a key's allowance has nothing to do with the deposit it attaches.**
+the attached deposit comes from the account's own balance and is
+limited by the contract, not by the key. the allowance only ever pays
+for gas.
 
 ---
 
@@ -113,15 +163,23 @@ then.
 | `--receiver-id <contract>` | the contract the key may call. required |
 | `--method <name>` | one method the key may call |
 | `--methods <a,b,c>` | several methods the key may call |
-| `--allowance <yoctoNEAR>` | how much of the deposit the key may spend |
+| `--allowance <yoctoNEAR>` | the key's **gas budget**. omit it for unlimited gas |
 | `--account <account_id>` | the account the key is for. default: the stored one |
 | `--public-key <key>` | re-queue an addition that was refused, with that key |
 | `--seed` | make the key from a seed phrase |
 | `--show-seed` | print the seed phrase |
 
-**the allowance is in yoctoNEAR.** `0.5` is not what goes here. use the
-unit conversion skill to turn a human amount into the chain's unit
-amount.
+**the allowance is the GAS BUDGET, in yoctoNEAR.** `0.5` is not what
+goes here. use the unit conversion skill to turn a human amount into
+the chain's unit amount. 1 NEAR is
+`1000000000000000000000000`, and 0.03 NEAR
+(`30000000000000000000000`) covers a 30 Tgas call.
+
+**`--allowance 0` is refused.** a zero gas budget means every call
+signed with the key fails with `NotEnoughAllowance` before the contract
+is reached, so the bin throws rather than queue a key that cannot
+work. **no `--allowance` at all is unlimited gas**, and that is
+valid — it is the default.
 
 **no method names means every method** on that contract. that is
 valid, and it is a bigger key than it looks. when the contract's method
@@ -229,6 +287,12 @@ agent holds the private key for. the agent's own store answers that.
 run this before queueing a removal. it is the way to tell which keys
 are the agent's own and which were made by somebody else.
 
+**`"allowance": null` on a limited key means UNLIMITED gas**, not "no
+gas". it is the chain's way of saying the key has no allowance field.
+the same null on a full access key means nothing at all — a full access
+key has no allowance, because it is the account and pays for its own
+gas out of the balance.
+
 ---
 
 #### THE TWO STORES
@@ -275,7 +339,7 @@ that key.
 1. **look at the account** — `key_chain.ts` for the keys it has now.
 2. **make the key** — `key_queue_add.ts` does both, and it makes a new
    one every time.
-3. **explain it** — the contract, the methods, the allowance, in plain
+3. **explain it** — the contract, the methods, the gas budget, in plain
    language, before it is queued.
 4. **queue it** — the human approves it in the web app.
 5. **keep the copy** — the local store has the key and the details.
@@ -285,6 +349,11 @@ that key.
 **say what the key can do before it is queued.** a limited key that may
 call every method on a contract is a different thing from one that may
 call two, and the human is the one approving it.
+
+**say how much gas it gets.** a key with a real gas budget and a key
+with unlimited gas are different offers, and a key with no gas is a key
+that cannot work. the human approves the number, so the number goes to
+them in plain words.
 
 ---
 

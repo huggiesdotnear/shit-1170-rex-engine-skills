@@ -52,15 +52,37 @@ import { shit_1170_local_queue_record_put_fun } from "./local_queue";
 // --- WHY THE CONTRACT, THE METHODS AND THE ALLOWANCE ARE ALL NEEDED ---
 // the receiver is what makes a key limited: it says which contract the
 // key may call. the methods say which of that contract's methods. the
-// allowance says how much of the attached deposit the key may spend.
+// allowance says how much gas the key may spend.
 //
-// a key with no method names may call EVERY method on the contract. a
-// key with no allowance may spend nothing. both are valid and both are
-// stated here, so the reader sees which one they are getting.
+// a key with no method names may call EVERY method on the contract. that
+// is a bigger key than it looks, and it is stated here so the reader
+// sees which one they are getting.
+//
+// --- WHY THE ALLOWANCE IS THE GAS BUDGET AND NOT THE DEPOSIT ---
+// the allowance on a function call key is the balance the key may spend
+// on GAS. the contract takes `gas_limit x gas_price` out of it before
+// the call runs, and the refund comes back to the key afterwards. it is
+// NOT a limit on the attached deposit, and it is NOT the account's
+// balance: a function call key cannot move NEAR at all.
+//
+// three states, and they mean three different things:
+//
+//   - `--allowance <amount>` — a gas budget. the key may spend that much
+//     on gas, over its whole life, and then it is dead.
+//   - no `--allowance` — the field is left off the key, and the protocol
+//     reads that as UNLIMITED gas. this is the default, and it is valid.
+//   - `--allowance 0` — a zero gas budget. every call signed with the
+//     key is refused with `NotEnoughAllowance` before the contract is
+//     reached. the key is a key that cannot do anything, so it is
+//     refused here rather than queued.
 //
 // --- WHY THE ALLOWANCE IS A UNIT AMOUNT ---
 // the allowance is in yoctoNEAR — 24 decimals. a human amount like
 // `0.5` is NOT what goes here. use the unit conversion skill.
+//
+// 1 NEAR is `1000000000000000000000000`. mainnet's gas price is
+// 1000000000 yoctoNEAR per gas unit, so a 30 Tgas call needs 0.03 NEAR
+// of allowance and 1 NEAR covers a very large number of calls.
 
 function main_fun(): Promise<void> {
   const args = parse_args_fun(process.argv.slice(2), {
@@ -72,6 +94,7 @@ function main_fun(): Promise<void> {
       usage: [
         "key_queue_add --receiver-id <contract_id> (--method <name> | --methods <a,b,c>) [--allowance <yoctoNEAR>] [--account <account_id>]",
         "key_queue_add --receiver-id <contract_id> --methods ft_swap --allowance 1000000000000000000000000",
+        "--allowance is the key's GAS budget in yoctoNEAR, not the deposit. 0 is refused: a key with a zero gas budget cannot make a call. omit it for unlimited gas.",
         "--public-key <key> re-queues an addition that was refused, with that key",
         "--seed makes the key from a seed phrase; --show-seed prints it",
       ],
@@ -114,6 +137,23 @@ function main_fun(): Promise<void> {
     if (allowance !== null && !/^\d+$/.test(allowance)) {
       throw new Error(
         `--allowance must be a whole number of yoctoNEAR, got "${allowance}"`,
+      );
+    }
+
+    // --- WHY A ZERO ALLOWANCE IS REFUSED: the allowance is the key's gas
+    // budget, and a budget of zero means every call signed with the key
+    // fails with `NotEnoughAllowance` before the contract is reached. a
+    // function call needs gas, so a zero allowance is a key that cannot
+    // make one. queueing it would hand out a key that looks usable and
+    // is not, so it is refused here, with the reason in plain words.
+    //
+    // leaving `--allowance` off is NOT the same as zero. the field is
+    // then absent from the key, and the protocol reads an absent
+    // allowance as unlimited gas.
+    if (allowance === "0") {
+      throw new Error(
+        "--allowance 0 would give the key a zero gas budget: every call signed with it would be refused with NotEnoughAllowance before the contract is reached. " +
+          "a function call needs gas. pass an allowance that covers the calls (1 NEAR is 1000000000000000000000000, and 0.03 NEAR covers a 30 Tgas call), or leave --allowance off for unlimited gas.",
       );
     }
 
